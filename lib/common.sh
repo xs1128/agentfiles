@@ -30,6 +30,8 @@ backup_path() {
   [ -e "$target" ] || [ -L "$target" ] || return 0
   local dest="$BACKUP_DIR/${target#"$HOME"/}"
   if [ "$DRY_RUN" = "1" ]; then plan "back up $target -> $dest"; return 0; fi
+  # Its own statement: `mkdir -p -m` only modes the deepest component.
+  mkdir -p -m 700 "$BACKUP_DIR"
   mkdir -p "$(dirname "$dest")"
   mv "$target" "$dest"
   info "backed up $target -> $dest"

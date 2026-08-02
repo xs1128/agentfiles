@@ -125,6 +125,8 @@ install_codex() {
 # Copy aside, not move: the merge needs the original in place.
 backup_path_copy() {
   local dest="$BACKUP_DIR/${1#"$HOME"/}"
+  # Its own statement: `mkdir -p -m` only modes the deepest component.
+  mkdir -p -m 700 "$BACKUP_DIR"
   mkdir -p "$(dirname "$dest")"
   cp "$1" "$dest"
   info "backed up $1 -> $dest"
