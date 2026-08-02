@@ -52,7 +52,7 @@ backup_path() {
   info "backed up $target -> $dest"
 }
 
-# Keep the newest BACKUP_KEEP runs; the timestamped names sort chronologically.
+# The timestamped dir names sort chronologically, so `sort -r` is newest-first.
 prune_backups() {
   [ -d "$BACKUP_ROOT" ] || return 0
   local dir

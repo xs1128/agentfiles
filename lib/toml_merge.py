@@ -38,6 +38,9 @@ def changed_leaves(managed: dict, existing, prefix: str = "") -> list[str]:
         path = prefix + key
         cur = existing.get(key) if isinstance(existing, dict) else None
         if isinstance(val, dict):
+            # An empty managed table has no leaves, so it is its own drift.
+            if not val and not isinstance(cur, dict):
+                out.append(path)
             out.extend(changed_leaves(val, cur, path + "."))
         elif cur != val:
             out.append(path)

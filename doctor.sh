@@ -44,10 +44,9 @@ check_dead_links() {
   fi
 }
 
-# A name-set diff, not a count. A floor passed with one missing and one stray,
-# and an exact count would need a per-agent fudge constant: claude also holds
-# workflow.md/.ts and codex owns a .system dotdir. Extra names an agent is
-# expected to carry are passed as trailing arguments.
+# A name-set diff, not a count: a floor passed with one missing and one stray,
+# and an exact count needs a per-agent fudge — claude also holds workflow.md/.ts,
+# codex owns a .system dotdir.
 check_skill_set() {
   local dir label; dir="$(expand_tilde "$1")"; label="$2"; shift 2
   [ -d "$dir" ] || { bad "$label: $dir missing"; return; }
@@ -149,7 +148,7 @@ else
   skip "nothing rendered or backed up yet"
 fi
 
-# Every third-party skill symlink in every agent points into this one tree.
+# Empty here means dead links in all three agents.
 step "Shared skill tree"
 SKILL_ROOT="$(expand_tilde "$(jget "$SKILLS_MANIFEST" installRoot)")"
 if [ ! -d "$SKILL_ROOT" ]; then

@@ -9,8 +9,9 @@ WIKI_MANIFEST="$REPO_ROOT/shared/manifests/wiki.json"
 CLONE_CACHE="$HOME/.cache/agent-config/sources"
 
 # Manifest values are validated, not trusted: a url reaches `git clone`, where
-# `ext::sh -c '…'` is remote-code-execution and a leading `-` is read as a flag;
-# a name reaches `rm -rf "$root/$name"`, where `../` escapes installRoot.
+# `ext::sh -c '…'` is remote-code-execution and a leading `-` is read as a flag
+# — hence _safe_url's https:// requirement. A name reaches `rm -rf "$root/$name"`,
+# where `../` escapes installRoot; names are always used prefixed by `$root/`.
 _safe_name() {
   case "$1" in ""|.*|*[!A-Za-z0-9._-]*) return 1 ;; esac
 }
