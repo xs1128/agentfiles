@@ -55,6 +55,8 @@ verify_plugin_pins() {
     drifted=1
   done < <(python3 - "$PLUGINS_MANIFEST" "$state" <<'PY'
 import json, os, sys
+# Keep apostrophes out of these heredocs: bash 3.2 fails to find the closing
+# paren of the enclosing <( ) and aborts at runtime. `bash -n` does not catch it.
 manifest = json.load(open(sys.argv[1]))["plugins"]
 installed = {}
 if os.path.exists(sys.argv[2]):
@@ -62,7 +64,7 @@ if os.path.exists(sys.argv[2]):
 for key, spec in manifest.items():
     entries = installed.get(key) or []
     if not entries:
-        continue  # absence is verify_required_plugins' job
+        continue  # absence is handled by verify_required_plugins
     got = entries[0]
     for field, want in (("version", spec.get("version")), ("gitCommitSha", spec.get("commit"))):
         if want and got.get(field) != want:
