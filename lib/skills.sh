@@ -55,9 +55,10 @@ install_third_party_skills() {
   step "Installing third-party skills (pinned)"
   local root; root="$(expand_tilde "$(jget "$SKILLS_MANIFEST" installRoot)")"
 
-  local slug url commit
+  local slug url commit failed_sources=" "
   while IFS=$'\t' read -r slug url commit; do
-    _ensure_source "$url" "$commit" "$slug" || { FAILURES=$((FAILURES + 1)); continue; }
+    _ensure_source "$url" "$commit" "$slug" \
+      || { FAILURES=$((FAILURES + 1)); failed_sources="$failed_sources$slug "; continue; }
   done < <(python3 -c 'import json,sys
 m=json.load(open(sys.argv[1]))
 for name,s in m["sources"].items():
@@ -77,6 +78,12 @@ for name,s in m["sources"].items():
     if [ "$DRY_RUN" = "1" ]; then
       count=$((count + 1)); continue
     fi
+
+    # A failed checkout leaves HEAD elsewhere, where both guards below still pass.
+    case "$failed_sources" in
+      *" ${src//\//__} "*) warn "$name: $src is not at its pinned commit — skipped"; continue ;;
+    esac
+
     [ -d "$from" ] || { warn "$name: $path not present in $src at pinned commit"; continue; }
 
     # Hash "$commit:$path", not "HEAD:$path": if the checkout above failed this

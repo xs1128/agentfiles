@@ -198,9 +198,12 @@ runs are kept.
 
 The one exception is third-party skills: `~/.agents/skills/<name>` is replaced
 outright from the pinned source, not backed up. It is a copy of upstream, and
-before copying, the installer checks both that the pinned tree matches
-`folderHash` and that the source worktree matches that tree — so a locally
-modified source is skipped rather than propagated into all three agents.
+before copying, the installer checks that the clone really is sitting on its
+pinned commit, that the pinned tree matches `folderHash`, and that the worktree
+under that path is clean — so a source that failed to check out, or was edited
+locally, is skipped rather than propagated into all three agents. Skipping
+leaves any previously-installed copy alone; the check stops first propagation,
+it does not retract an earlier one.
 
 ## Secrets
 
@@ -253,9 +256,10 @@ See `claude/workflows/README.md`.
 ## Updating pins
 
 Skills and plugins are both pinned by commit SHA, but only the skill pins are
-**enforced**. Each skill's tree is hashed against `folderHash`, and its source
-worktree checked against that tree, before anything is copied — a mismatch skips
-that skill and fails the run.
+**enforced**. The source clone must be sitting on its pinned commit, each
+skill's tree is hashed against `folderHash`, and the worktree under that path
+must be clean, before anything is copied — a mismatch skips that skill and fails
+the run.
 
 Plugin pins are **reported only**. `claude plugin install` takes no version or
 commit flag and always fetches latest, so all the installer can do is read the
