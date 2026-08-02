@@ -96,6 +96,11 @@ if [ "$dirty" = 0 ]; then
   ok "clean working tree"
 else
   warn "uncommitted changes in repo ($dirty file(s))"
+  # settings.json is symlinked into ~/.claude, so an interactive /model writes
+  # through the link and back into the repo — worth naming, not just counting.
+  if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- claude/settings.json 2>/dev/null)" ]; then
+    info "     claude/settings.json is one of them — /model and friends write back through the symlink; review that diff before committing"
+  fi
 fi
 
 step "Secrets"
