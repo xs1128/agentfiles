@@ -9,7 +9,13 @@ DEPS_MISSING=0
 # the same name apart — see rtk. Trusted input: the manifest is a repo file.
 _dep_present() {
   local name="$1" check="$2"
-  if [ -n "$check" ]; then eval "$check" >/dev/null 2>&1; else have "$name"; fi
+  # Not under --dry-run: these are real subprocesses that write state — `rtk gain`
+  # creates history.db, `go version` a telemetry dir — and a dry run changes nothing.
+  if [ -n "$check" ] && [ "$DRY_RUN" != "1" ]; then
+    eval "$check" >/dev/null 2>&1
+  else
+    have "$name"
+  fi
 }
 
 _dep_check() {
