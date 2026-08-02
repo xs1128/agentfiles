@@ -401,7 +401,9 @@ func (m model) viewRun() string {
 	case m.runErr != nil:
 		foot = sErr.Render("could not run: " + m.runErr.Error())
 	case !m.finished:
-		foot = sDim.Render("↑/↓ scroll · ctrl+c abort")
+		// ctrl+c is a bare tea.Quit — the script is never signalled, so it keeps
+		// running to completion in the background. Say so rather than promise abort.
+		foot = sDim.Render("↑/↓ scroll · ctrl+c quit (script keeps running)")
 	case m.exitCode == 0:
 		foot = sOn.Render("done") + sDim.Render("  ·  q to quit")
 	default:
