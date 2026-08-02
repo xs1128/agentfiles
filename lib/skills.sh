@@ -115,7 +115,10 @@ install_wiki_skills() {
   _safe_url "$repo" || { warn "wiki.json: refusing repo, not https://: $repo"; return 0; }
 
   if [ ! -d "$checkout/.git" ]; then
-    run git clone --quiet -- "$repo" "$checkout" || { fail "clone failed: $repo"; return 1; }
+    # Counted, not returned: this repo needs credentials a fresh machine has not
+    # got yet, and it sits upstream of every agent in install.sh.
+    run git clone --quiet -- "$repo" "$checkout" \
+      || { fail "clone failed: $repo"; FAILURES=$((FAILURES + 1)); return 0; }
     ok "cloned $repo -> $checkout"
   else
     # Actively edited: never reset it, just report drift.
