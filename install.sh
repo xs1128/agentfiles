@@ -130,7 +130,7 @@ install_codex() {
 # Copy aside, not move: the merge needs the original in place. Unchanged since
 # the newest archived copy means an idempotent re-run — nothing new to keep.
 backup_path_copy() {
-  local rel="${1#"$HOME"/}"
+  local rel; rel="$(backup_rel "$1")"
   local dest="$BACKUP_DIR/$rel" newest
   # `|| true`: with pipefail, find failing on a not-yet-created root would abort.
   newest="$(find "$BACKUP_ROOT" -mindepth 2 -path "*/$rel" -type f 2>/dev/null | sort | tail -1 || true)"

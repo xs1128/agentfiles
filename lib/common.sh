@@ -28,13 +28,18 @@ expand_tilde() { printf '%s' "${1/#\~/$HOME}"; }
 BACKUP_ROOT="${BACKUP_ROOT:-$HOME/.agent-config-backups}"
 BACKUP_KEEP=10
 
-# Move an existing path into this run's backup dir, keeping its layout. Pass the
-# incoming replacement as $2 and a byte-identical target is dropped, not archived
-# — that is what stops the tree growing on every idempotent re-run.
+# A target outside $HOME keeps its leading /, which would yield "$BACKUP_DIR//abs"
+# and defeat install.sh's `find -path "*/$rel"` dedup.
+backup_rel() {
+  case "$1" in "$HOME"/*) printf '%s' "${1#"$HOME"/}" ;; *) printf '%s' "${1#/}" ;; esac
+}
+
+# Pass the incoming replacement as $2 and a byte-identical target is dropped, not
+# archived — that is what stops the tree growing on every idempotent re-run.
 backup_path() {
   local target="$1" incoming="${2:-}"
   [ -e "$target" ] || [ -L "$target" ] || return 0
-  local dest="$BACKUP_DIR/${target#"$HOME"/}"
+  local dest="$BACKUP_DIR/$(backup_rel "$target")"
   if [ "$DRY_RUN" = "1" ]; then plan "back up $target -> $dest"; return 0; fi
   if [ -n "$incoming" ] && cmp -s "$target" "$incoming"; then
     rm -rf "$target"
