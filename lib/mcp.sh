@@ -12,20 +12,29 @@ install_mcp_servers() {
   step "Registering MCP servers"
   have claude || { warn "claude not on PATH — skipping MCP servers"; return 0; }
 
-  local name scope json
-  while IFS=$'\t' read -r name scope json; do
+  local name scope state json
+  while IFS=$'\t' read -r name scope state json; do
     [ -n "$name" ] || continue
 
-    # add-json errors on an existing name rather than updating, so replace it.
-    if claude mcp get "$name" >/dev/null 2>&1; then
-      if [ "$DRY_RUN" = "1" ]; then
-        plan "re-register mcp $name (already present)"
-        continue
-      fi
-      claude mcp remove --scope "$scope" "$name" >/dev/null 2>&1 || true
-    elif [ "$DRY_RUN" = "1" ]; then
-      plan "claude mcp add-json --scope $scope $name '<config>'"
+    if [ "$state" = same ]; then
+      skip "mcp $name (already registered as configured)"
       continue
+    fi
+
+    if [ "$DRY_RUN" = "1" ]; then
+      if [ "$state" = differ ]; then
+        plan "re-register mcp $name (registered definition differs)"
+      else
+        plan "claude mcp add-json --scope $scope $name '<config>'"
+      fi
+      continue
+    fi
+
+    # add-json errors on an existing name rather than updating, so replace it.
+    # Only when it genuinely differs: an unconditional remove leaves a working
+    # server deregistered if the add that follows fails.
+    if [ "$state" = differ ]; then
+      claude mcp remove --scope "$scope" "$name" >/dev/null 2>&1 || true
     fi
 
     if claude mcp add-json --scope "$scope" "$name" "$json" >/dev/null 2>&1; then
@@ -33,9 +42,20 @@ install_mcp_servers() {
     else
       fail "mcp $name could not be registered"
       info "     retry by hand: claude mcp add-json --scope $scope $name '$json'"
+      FAILURES=$((FAILURES + 1))
     fi
-  done < <(python3 -c 'import json,sys
-m=json.load(open(sys.argv[1]))
-for name,s in m["servers"].items():
-    print("\t".join([name, s.get("scope","user"), json.dumps(s["config"])]))' "$MCP_MANIFEST")
+  done < <(python3 - "$MCP_MANIFEST" "$HOME/.claude.json" <<'PY'
+import json, os, sys
+# `claude mcp get` has no --json, so compare against the user-scope store itself.
+manifest = json.load(open(sys.argv[1]))["servers"]
+registered = {}
+if os.path.exists(sys.argv[2]):
+    registered = json.load(open(sys.argv[2])).get("mcpServers") or {}
+for name, spec in manifest.items():
+    want = spec["config"]
+    have = registered.get(name)
+    state = "same" if have == want else ("differ" if have else "absent")
+    print("\t".join([name, spec.get("scope", "user"), state, json.dumps(want)]))
+PY
+)
 }
