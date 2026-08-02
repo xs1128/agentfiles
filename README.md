@@ -187,6 +187,10 @@ This is the one place Codex deliberately diverges from `claude/CLAUDE.md`, which
 configured" — its detector looks for the import line. `doctor.sh` checks the
 thing that actually matters instead, by grepping `codex debug prompt-input`.
 
+Codex deliberately gets **no caveman mode** — it has no plugin system, so if it
+were ever wanted the rules would have to be inlined into `codex/AGENTS.md` as
+rule text, exactly like the rtk rules above.
+
 Any **config** already occupying a target path is moved to
 `~/.agent-config-backups/<timestamp>/` first — the installer never clobbers one.
 Byte-identical files are dropped rather than archived, and only the ten newest
