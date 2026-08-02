@@ -135,11 +135,14 @@ install_wiki_skills() {
     local dirty; dirty="$(git -C "$checkout" status --porcelain 2>/dev/null | wc -l | tr -d ' ' || true)"
     ok "$checkout present${dirty:+ ($dirty uncommitted file(s))}"
 
-    local head want
-    head="$(git -C "$checkout" rev-parse HEAD 2>/dev/null || true)"
+    # --verify, or an unborn HEAD echoes the literal "HEAD" back and the warning
+    # below reads as though the checkout were fine.
+    local head want at
+    head="$(git -C "$checkout" rev-parse --verify HEAD 2>/dev/null || true)"
     want="$(jget "$WIKI_MANIFEST" commit || true)"
     if [ "$head" != "$want" ]; then
-      warn "$checkout is at ${head:0:12}, wiki.json pins ${want:0:12} — bump the pin once you are happy with it"
+      at="${head:0:12}"
+      warn "$checkout is at ${at:-no commits yet}, wiki.json pins ${want:0:12} — bump the pin once you are happy with it"
     fi
   fi
 }
