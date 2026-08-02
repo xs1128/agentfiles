@@ -147,7 +147,9 @@ if [ "$DO_CLAUDE" = 1 ]; then
   check_dead_links "$CLAUDE_HOME/skills"
   check_skill_count "$CLAUDE_HOME/skills" "$(third_party_and_wiki_count)" "claude skills"
   # The three mandatory pieces: rtk (host binary), caveman + claude-hud (plugins).
-  have rtk || bad "rtk missing — the Bash PreToolUse hook in settings.json will fail on every call"
+  # `rtk gain`, not `have rtk`: reachingforthejack/rtk owns the same name and has
+  # no `gain` subcommand — see claude/RTK.md.
+  rtk gain >/dev/null 2>&1 || bad "rtk missing or not the token killer — the Bash PreToolUse hook in settings.json will fail on every call"
   have bun || bad "bun missing — claude-hud statusline will not render"
   have jq  || bad "jq missing — claude/statusline.sh degrades to a bare model name"
 
@@ -194,7 +196,7 @@ if [ "$DO_CODEX" = 1 ]; then
   check_skill_count "$CODEX_HOME/skills" "$(third_party_and_wiki_count)" "codex skills"
 
   # AGENTS.md is the only thing telling Codex to use rtk — it gets no hook.
-  have rtk || bad "rtk missing — codex/AGENTS.md tells the model to prefix every shell command with it"
+  rtk gain >/dev/null 2>&1 || bad "rtk missing or not the token killer — codex/AGENTS.md tells the model to prefix every shell command with it"
 
   # Codex ignores `@file` imports (it inlines AGENTS.md verbatim), so the rules
   # only work if they are in the file itself. Ask Codex what it actually sees.
