@@ -105,7 +105,8 @@ claude/
   statusline.sh         pure-bash statusline; fallback, not wired by default
   profiles/glm/         settings.json.tmpl for the z.ai variant
 codex/
-  config.toml.tmpl      managed keys only: model, MCP servers, plugins, desktop
+  config.toml.tmpl      managed keys only: MCP servers, plugins, desktop, approvals_reviewer
+                        (not model/reasoning effort — those are Codex's own UI choice)
   AGENTS.md             global instructions; the rtk rules, inlined (see below)
 pi/                     settings.json, models.json.tmpl
 ```
@@ -150,8 +151,14 @@ MCP servers reach the two agents by different routes for the same reason. Claude
 keeps them in `~/.claude.json`, which it rewrites itself, so `claude/mcp.json`
 holds the definitions and `install.sh` applies them with `claude mcp add-json`.
 Codex keeps them in `config.toml`, so the merge above already covers them and
-they live directly in `codex/config.toml.tmpl`. Both end up with figma,
-firebase, and playwright.
+they live directly in `codex/config.toml.tmpl`.
+
+They do not end up with the same set by the same route. `claude/mcp.json`
+defines only **firebase** and **playwright**; Claude gets **figma** from the
+`figma@claude-plugins-official` plugin instead. Codex gets all three from
+`config.toml`. The npm-published two are pinned to an exact version in both
+files — bumping them is a reviewable manifest diff, not a silent `@latest`
+refetch on every session.
 
 ### Why codex/AGENTS.md inlines the rtk rules
 
@@ -174,8 +181,15 @@ This is the one place Codex deliberately diverges from `claude/CLAUDE.md`, which
 configured" — its detector looks for the import line. `doctor.sh` checks the
 thing that actually matters instead, by grepping `codex debug prompt-input`.
 
-Anything already occupying a target path is moved to
-`~/.agent-config-backups/<timestamp>/` — the installer never clobbers.
+Any **config** already occupying a target path is moved to
+`~/.agent-config-backups/<timestamp>/` first — the installer never clobbers one.
+Byte-identical files are dropped rather than archived, and only the ten newest
+runs are kept.
+
+The one exception is third-party skills: `~/.agents/skills/<name>` is replaced
+outright from the pinned source, not backed up. It is a copy of upstream, and
+the installer verifies its tree hash against `folderHash` before copying, so
+anything it overwrites was either that same tree or local drift.
 
 ## Secrets
 
@@ -189,8 +203,12 @@ Nothing credential-shaped is committed. All keys live in one gitignored file:
 |---|---|
 | `ZAI_API_KEY` | Claude GLM profile (`ANTHROPIC_AUTH_TOKEN`) and pi's `zai` provider |
 
-`doctor.sh` greps the tracked tree for API-key-shaped strings and fails if it
-finds any.
+`doctor.sh` greps the **working tree** (not the index — with nothing staged that
+scanned nothing) for API-key-shaped strings, and also checks where a real key
+actually lands: the rendered `pi/models.json` and GLM `settings.json`, and
+`~/.agent-config-backups/`. It fails naming the offending file. It reads the
+secrets file with a small parser rather than sourcing it, so a stray line in a
+hand-edited file is never executed.
 
 ## Profiles
 
@@ -222,9 +240,17 @@ feeds the next as `$INPUT`. See `claude/workflows/README.md`.
 
 ## Updating pins
 
-Skills and plugins are pinned by commit SHA. To take upstream changes, bump the
-`commit` field in the relevant manifest and re-run the installer — the update is
-a reviewable diff, never a surprise.
+Skills and plugins are pinned by commit SHA, and both pins are enforced rather
+than merely recorded. Each skill's tree is hashed against `folderHash` before it
+is copied, and the plugin `version`/`gitCommitSha` that actually landed is read
+back from `installed_plugins.json` — `claude plugin install` takes no version
+flag, so a mismatch is reported instead of assumed away.
+
+The wiki is the exception: it is a live checkout you edit, so it is never reset.
+Its `commit` is a drift warning only.
+
+To take upstream changes, bump the `commit` field in the relevant manifest and
+re-run the installer — the update is a reviewable diff, never a surprise.
 
 ```bash
 git ls-remote https://github.com/mattpocock/skills.git HEAD   # get the new SHA
