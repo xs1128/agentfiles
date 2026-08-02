@@ -95,7 +95,10 @@ PY
   if [ ${#missing[@]} -gt 0 ]; then
     fail "required plugin(s) not installed: ${missing[*]}"
     info "     fix: claude plugin install ${missing[0]}"
-    return 1
+    # Counted, not returned: returning 1 errexited install.sh before the MCP
+    # servers and the entire GLM profile block ever ran.
+    FAILURES=$((FAILURES + ${#missing[@]}))
+    return 0
   fi
   ok "required plugins present (caveman, claude-hud)"
 }
