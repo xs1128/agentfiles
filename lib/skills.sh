@@ -8,13 +8,31 @@ SKILLS_MANIFEST="$REPO_ROOT/shared/manifests/skills.json"
 WIKI_MANIFEST="$REPO_ROOT/shared/manifests/wiki.json"
 CLONE_CACHE="$HOME/.cache/agent-config/sources"
 
+# Manifest values are validated, not trusted: a url reaches `git clone`, where
+# `ext::sh -c '…'` is remote-code-execution and a leading `-` is read as a flag;
+# a name reaches `rm -rf "$root/$name"`, where `../` escapes installRoot.
+_safe_name() {
+  case "$1" in ""|.*|*[!A-Za-z0-9._-]*) return 1 ;; esac
+}
+
+_safe_path() {
+  case "$1" in ""|/*|*/|*//*|.*|*/.*|*[!A-Za-z0-9._/-]*) return 1 ;; esac
+}
+
+_safe_url() {
+  case "$1" in https://*) return 0 ;; *) return 1 ;; esac
+}
+
 # Clone or reuse a source repo, hard-pinned to a commit.
 _ensure_source() {
   local url="$1" commit="$2" dir="$CLONE_CACHE/$3"
 
+  _safe_name "$3" || { warn "skills.json: refusing unsafe source name: $3"; return 1; }
+  _safe_url "$url" || { warn "skills.json: refusing $3, url is not https://: $url"; return 1; }
+
   if [ ! -d "$dir/.git" ]; then
     run mkdir -p "$(dirname "$dir")"
-    run git clone --quiet "$url" "$dir" || { fail "clone failed: $url"; return 1; }
+    run git clone --quiet -- "$url" "$dir" || { fail "clone failed: $url"; return 1; }
   fi
   [ "$DRY_RUN" = "1" ] && { plan "pin $3 -> ${commit:0:12}"; return 0; }
 
@@ -38,7 +56,7 @@ install_third_party_skills() {
 
   local slug url commit
   while IFS=$'\t' read -r slug url commit; do
-    _ensure_source "$url" "$commit" "$slug" || return 1
+    _ensure_source "$url" "$commit" "$slug" || { FAILURES=$((FAILURES + 1)); continue; }
   done < <(python3 -c 'import json,sys
 m=json.load(open(sys.argv[1]))
 for name,s in m["sources"].items():
@@ -47,6 +65,11 @@ for name,s in m["sources"].items():
   run mkdir -p "$root"
   local count=0 name src path want commit
   while IFS=$'\t' read -r name src path want commit; do
+    if ! _safe_name "$name" || ! _safe_path "$path"; then
+      warn "skills.json: refusing unsafe entry (name=$name path=$path)"
+      FAILURES=$((FAILURES + 1))
+      continue
+    fi
     local dir="$CLONE_CACHE/${src//\//__}"
     local from="$dir/$path"
     local to="$root/$name"
@@ -64,6 +87,12 @@ for name,s in m["sources"].items():
       continue
     fi
 
+    # An empty installRoot from a malformed manifest would make this `rm -rf /$name`.
+    if [ -z "$root" ] || [ -z "$name" ]; then
+      warn "skills.json: empty installRoot or name — refusing to remove $to"
+      FAILURES=$((FAILURES + 1))
+      continue
+    fi
     rm -rf "$to"
     cp -R "$from" "$to"
     count=$((count + 1))
@@ -81,8 +110,10 @@ install_wiki_skills() {
   checkout="$(expand_tilde "$(jget "$WIKI_MANIFEST" checkout)")"
   repo="$(jget "$WIKI_MANIFEST" repo)"
 
+  _safe_url "$repo" || { warn "wiki.json: refusing repo, not https://: $repo"; return 0; }
+
   if [ ! -d "$checkout/.git" ]; then
-    run git clone --quiet "$repo" "$checkout" || { fail "clone failed: $repo"; return 1; }
+    run git clone --quiet -- "$repo" "$checkout" || { fail "clone failed: $repo"; return 1; }
     ok "cloned $repo -> $checkout"
   else
     # Actively edited: never reset it, just report drift.
