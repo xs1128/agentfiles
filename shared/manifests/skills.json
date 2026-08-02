@@ -1,11 +1,6 @@
 {
   "$comment": "Third-party skills, pinned. install.sh clones each source at `commit` and copies `path` -> $AGENT_SKILLS_HOME/<name>.",
   "installRoot": "~/.agents/skills",
-  "linkInto": [
-    "~/.claude/skills",
-    "~/.codex/skills",
-    "~/.pi/agent/skills"
-  ],
   "sources": {
     "mattpocock/skills": {
       "url": "https://github.com/mattpocock/skills.git",

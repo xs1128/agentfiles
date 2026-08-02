@@ -119,6 +119,13 @@ install_wiki_skills() {
     # Actively edited: never reset it, just report drift.
     local dirty; dirty="$(git -C "$checkout" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
     ok "$checkout present${dirty:+ ($dirty uncommitted file(s))}"
+
+    local head want
+    head="$(git -C "$checkout" rev-parse HEAD 2>/dev/null)"
+    want="$(jget "$WIKI_MANIFEST" commit)"
+    if [ "$head" != "$want" ]; then
+      warn "$checkout is at ${head:0:12}, wiki.json pins ${want:0:12} — bump the pin once you are happy with it"
+    fi
   fi
 }
 
