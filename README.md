@@ -73,7 +73,7 @@ share one copy of the subagents and skills.
 | Something feels wrong | `./doctor.sh` |
 | Don't want to remember flags | `./setup` |
 | New machine | Steps 0–4 |
-| Undo | Everything replaced is in `~/.agent-config-backups/<timestamp>/` |
+| Undo | Replaced configs are in `~/.agent-config-backups/<timestamp>/` — newest 10 runs, byte-identical files not copied |
 
 Restarting the agent picks up config changes; `settings.json` and `agents/` are
 read at launch.
@@ -198,8 +198,9 @@ runs are kept.
 
 The one exception is third-party skills: `~/.agents/skills/<name>` is replaced
 outright from the pinned source, not backed up. It is a copy of upstream, and
-the installer verifies its tree hash against `folderHash` before copying, so
-anything it overwrites was either that same tree or local drift.
+before copying, the installer checks both that the pinned tree matches
+`folderHash` and that the source worktree matches that tree — so a locally
+modified source is skipped rather than propagated into all three agents.
 
 ## Secrets
 
@@ -243,18 +244,24 @@ Run a session on the orchestrator and prompt it to *strictly follow your agentic
 workflow*; it dispatches the rest sequentially or in parallel.
 Subagent design credit: [disler](https://github.com/disler/pi-vs-claude-code/tree/main).
 
-`claude/workflows/agent-pipelines.yaml` chains them into named pipelines
-(`plan-build-review`, `scout-flow`, `full-review`, `build-review-loop`,
-`weekly-sweep`), invoked with `/workflow <name> "<task>"`. Each step's output
-feeds the next as `$INPUT`. See `claude/workflows/README.md`.
+`claude/workflows/agent-pipelines.yaml` chains them into seven named pipelines
+(`plan-build-review`, `plan-build`, `scout-flow`, `plan-review-plan`,
+`full-review`, `build-review-loop`, `weekly-sweep`), invoked with
+`/workflow <name> "<task>"`. Each step's output feeds the next as `$INPUT`.
+See `claude/workflows/README.md`.
 
 ## Updating pins
 
-Skills and plugins are pinned by commit SHA, and both pins are enforced rather
-than merely recorded. Each skill's tree is hashed against `folderHash` before it
-is copied, and the plugin `version`/`gitCommitSha` that actually landed is read
-back from `installed_plugins.json` — `claude plugin install` takes no version
-flag, so a mismatch is reported instead of assumed away.
+Skills and plugins are both pinned by commit SHA, but only the skill pins are
+**enforced**. Each skill's tree is hashed against `folderHash`, and its source
+worktree checked against that tree, before anything is copied — a mismatch skips
+that skill and fails the run.
+
+Plugin pins are **reported only**. `claude plugin install` takes no version or
+commit flag and always fetches latest, so all the installer can do is read the
+`version`/`gitCommitSha` that actually landed back out of
+`installed_plugins.json` and compare. A mismatch is a warning telling you to bump
+the pin — reinstalling would just refetch latest, so it cannot fix anything.
 
 The wiki is the exception: it is a live checkout you edit, so it is never reset.
 Its `commit` is a drift warning only.
