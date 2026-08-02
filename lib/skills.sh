@@ -9,9 +9,8 @@ WIKI_MANIFEST="$REPO_ROOT/shared/manifests/wiki.json"
 CLONE_CACHE="$HOME/.cache/agent-config/sources"
 
 # Manifest values are validated, not trusted: a url reaches `git clone`, where
-# `ext::sh -c '…'` is remote-code-execution and a leading `-` is read as a flag
-# — hence _safe_url's https:// requirement. A name reaches `rm -rf "$root/$name"`,
-# where `../` escapes installRoot; names are always used prefixed by `$root/`.
+# `ext::sh -c '…'` is remote-code-execution and a leading `-` is read as a flag;
+# a name reaches `rm -rf "$root/$name"`, where `../` escapes installRoot.
 _safe_name() {
   case "$1" in ""|.*|*[!A-Za-z0-9._-]*) return 1 ;; esac
 }
@@ -44,7 +43,7 @@ _ensure_source() {
 
   # A clone already sitting on $commit skips the checkout above, so without this
   # nothing would ever notice edits made straight into the cache.
-  local dirty; dirty="$(git -C "$dir" status --porcelain 2>/dev/null)"
+  local dirty; dirty="$(git -C "$dir" status --porcelain 2>/dev/null || true)"
   if [ -n "$dirty" ]; then
     warn "$3: clone cache modified locally — restore with: git -C $dir checkout --force --detach $commit"
   fi
@@ -86,11 +85,10 @@ for name,s in m["sources"].items():
 
     [ -d "$from" ] || { warn "$name: $path not present in $src at pinned commit"; continue; }
 
-    # Hash "$commit:$path", not "HEAD:$path": if the checkout above failed this
-    # would otherwise verify whatever tree the clone happens to be sitting on.
-    # `|| true`: a bare assignment takes the substitution's status, and rev-parse
-    # exits 128 when the pinned commit is not in the clone.
-    local got; got="$(git -C "$dir" rev-parse "$commit:$path" 2>/dev/null || true)"
+    # Hash "$commit:$path", not "HEAD:$path", so a stale worktree cannot satisfy it.
+    # --verify, or an unresolvable spec is echoed back and reads as a hash mismatch.
+    # `|| true`: a bare assignment takes the substitution's status; rev-parse exits 128.
+    local got; got="$(git -C "$dir" rev-parse --verify "$commit:$path" 2>/dev/null || true)"
     if [ "$got" != "$want" ]; then
       warn "$name: tree $got does not match folderHash $want — skipped"
       FAILURES=$((FAILURES + 1))
@@ -137,8 +135,7 @@ install_wiki_skills() {
     ok "cloned $repo -> $checkout"
   else
     # Actively edited: never reset it, just report drift.
-    # `|| true`: a bare assignment takes the substitution's status; HEAD is unborn
-    # in a freshly `git init`ed checkout, where rev-parse exits 128.
+    # `|| true`: under pipefail a failing `git status` would abort the run here.
     local dirty; dirty="$(git -C "$checkout" status --porcelain 2>/dev/null | wc -l | tr -d ' ' || true)"
     ok "$checkout present${dirty:+ ($dirty uncommitted file(s))}"
 

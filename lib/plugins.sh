@@ -43,9 +43,6 @@ for key,s in m["plugins"].items(): print("\t".join([key,s["version"]]))' "$PLUGI
 
 # `claude plugin install` takes no version or commit flag — it always fetches
 # latest — so plugins.json's pins can be read back but never enforced.
-# Reported, not counted: upstream claude-hud ships 0.6.0 against a 0.3.0 pin, so
-# counting this would make install.sh exit 1 on every fresh machine forever, and
-# the uninstall/reinstall once suggested here only refetches latest again.
 verify_plugin_pins() {
   local state="$1/plugins/installed_plugins.json"
   local key detail drifted=0
