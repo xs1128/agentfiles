@@ -65,7 +65,7 @@
     "emil-design-eng": {
       "source": "emilkowalski/skill",
       "path": "skills/emil-design-eng",
-      "folderHash": "0e6f8d7223a0abe73f81e890b3ec76257029a834"
+      "folderHash": "175725745e70946d891b93a1694d7c9ebb71b69d"
     },
     "git-guardrails-claude-code": {
       "source": "mattpocock/skills",
@@ -185,7 +185,7 @@
     "to-tickets": {
       "source": "mattpocock/skills",
       "path": "skills/engineering/to-tickets",
-      "folderHash": "5467d7a37ef365ed43ebe6eb466d6e952be881b8"
+      "folderHash": "80c1bedbdaa72a4abd524055013accb4fe0ea8c4"
     },
     "triage": {
       "source": "mattpocock/skills",
