@@ -43,6 +43,8 @@ for key,s in m["plugins"].items(): print("\t".join([key,s["version"]]))' "$PLUGI
 
 # `claude plugin install` takes no version or commit flag — it always fetches
 # latest — so plugins.json's pins can be read back but never enforced.
+# Warned, not counted, where doctor.sh calls the same drift bad: install.sh does
+# work, and exiting 1 over something it cannot fix would block every fresh machine.
 verify_plugin_pins() {
   local state="$1/plugins/installed_plugins.json"
   local key detail drifted=0

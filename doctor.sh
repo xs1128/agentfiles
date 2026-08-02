@@ -206,8 +206,9 @@ for key, spec in manifest["plugins"].items():
     if have == want:
         print("\t".join(["ok", key, want]))
     elif have:
-        # A pin the machine does not honour is drift, not a passing check. The fix
-        # is bumping the pin: `claude plugin install` only ever fetches latest.
+        # bad here, warn in lib/plugins.sh, on purpose: doctor only reports, so it
+        # can fail on drift install.sh must not fail on. The fix is bumping the
+        # pin by hand — `claude plugin install` only ever fetches latest.
         print("\t".join(["bad", key, f"version {have}, plugins.json pins {want} — bump the pin in claude/plugins.json"]))
     else:
         print("\t".join(["bad", key, "not installed — " + spec.get("why", "required")]))
