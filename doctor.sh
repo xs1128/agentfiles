@@ -166,7 +166,7 @@ if [ "$DO_CLAUDE" = 1 ]; then
 
   while IFS=$'\t' read -r status key note; do
     [ -n "$key" ] || continue
-    [ "$status" = ok ] && ok "plugin $key ($note)" || bad "plugin $key missing — $note"
+    [ "$status" = ok ] && ok "plugin $key ($note)" || bad "plugin $key: $note"
   done < <(python3 - "$REPO_ROOT/claude/plugins.json" "$CLAUDE_HOME/plugins/installed_plugins.json" <<'PY'
 import json, os, sys
 manifest = json.load(open(sys.argv[1]))
@@ -182,9 +182,10 @@ for key, spec in manifest["plugins"].items():
     if have == want:
         print("\t".join(["ok", key, want]))
     elif have:
-        print("\t".join(["ok", key, f"{have}, manifest pins {want}"]))
+        # A pin the machine does not honour is drift, not a passing check.
+        print("\t".join(["bad", key, f"version {have}, plugins.json pins {want} — run ./install.sh --claude"]))
     else:
-        print("\t".join(["bad", key, spec.get("why", "required")]))
+        print("\t".join(["bad", key, "not installed — " + spec.get("why", "required")]))
 PY
 )
 fi

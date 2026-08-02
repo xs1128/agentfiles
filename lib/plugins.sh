@@ -38,6 +38,38 @@ for key,s in m["plugins"].items(): print("\t".join([key,s["version"]]))' "$PLUGI
 
   prune_unmanaged_plugins "${CLAUDE_HOME:-$HOME/.claude}"
   [ "$DRY_RUN" = "1" ] || verify_required_plugins "${CLAUDE_HOME:-$HOME/.claude}"
+  [ "$DRY_RUN" = "1" ] || verify_plugin_pins "${CLAUDE_HOME:-$HOME/.claude}"
+}
+
+# `claude plugin install` takes no version or commit flag, so the pins in
+# plugins.json can only be enforced by reading back what actually landed.
+# claude-hud execs TypeScript on every statusline refresh, so this matters.
+verify_plugin_pins() {
+  local state="$1/plugins/installed_plugins.json"
+  local key detail drifted=0
+  while IFS=$'\t' read -r key detail; do
+    [ -n "$key" ] || continue
+    fail "plugin $key: $detail"
+    info "     fix: claude plugin uninstall $key && claude plugin install $key"
+    FAILURES=$((FAILURES + 1))
+    drifted=1
+  done < <(python3 - "$PLUGINS_MANIFEST" "$state" <<'PY'
+import json, os, sys
+manifest = json.load(open(sys.argv[1]))["plugins"]
+installed = {}
+if os.path.exists(sys.argv[2]):
+    installed = json.load(open(sys.argv[2])).get("plugins", {})
+for key, spec in manifest.items():
+    entries = installed.get(key) or []
+    if not entries:
+        continue  # absence is verify_required_plugins' job
+    got = entries[0]
+    for field, want in (("version", spec.get("version")), ("gitCommitSha", spec.get("commit"))):
+        if want and got.get(field) != want:
+            print("\t".join([key, "%s is %s, plugins.json pins %s" % (field, got.get(field), want)]))
+PY
+)
+  if [ "$drifted" = 0 ]; then ok "plugin pins match plugins.json"; fi
 }
 
 # Dropping a plugin from plugins.json has to actually remove it, or the repo
