@@ -22,6 +22,13 @@ _ensure_source() {
     git -C "$dir" fetch --quiet origin || warn "fetch failed for $3, using local objects"
     git -C "$dir" checkout --quiet --detach "$commit" || { fail "commit $commit not found in $3"; return 1; }
   fi
+
+  # A clone already sitting on $commit skips the checkout above, so without this
+  # nothing would ever notice edits made straight into the cache.
+  local dirty; dirty="$(git -C "$dir" status --porcelain 2>/dev/null)"
+  if [ -n "$dirty" ]; then
+    warn "$3: clone cache modified locally — restore with: git -C $dir checkout --force --detach $commit"
+  fi
   ok "$3 @ ${commit:0:12}"
 }
 
@@ -38,21 +45,32 @@ for name,s in m["sources"].items():
     print("\t".join([name.replace("/","__"), s["url"], s["commit"]]))' "$SKILLS_MANIFEST")
 
   run mkdir -p "$root"
-  local count=0 name src path
-  while IFS=$'\t' read -r name src path; do
-    local from="$CLONE_CACHE/${src//\//__}/$path"
+  local count=0 name src path want commit
+  while IFS=$'\t' read -r name src path want commit; do
+    local dir="$CLONE_CACHE/${src//\//__}"
+    local from="$dir/$path"
     local to="$root/$name"
     if [ "$DRY_RUN" = "1" ]; then
       count=$((count + 1)); continue
     fi
     [ -d "$from" ] || { warn "$name: $path not present in $src at pinned commit"; continue; }
+
+    # Hash "$commit:$path", not "HEAD:$path": if the checkout above failed this
+    # would otherwise verify whatever tree the clone happens to be sitting on.
+    local got; got="$(git -C "$dir" rev-parse "$commit:$path" 2>/dev/null)"
+    if [ "$got" != "$want" ]; then
+      warn "$name: tree $got does not match folderHash $want — skipped"
+      FAILURES=$((FAILURES + 1))
+      continue
+    fi
+
     rm -rf "$to"
     cp -R "$from" "$to"
     count=$((count + 1))
   done < <(python3 -c 'import json,sys
 m=json.load(open(sys.argv[1]))
 for name,s in m["skills"].items():
-    print("\t".join([name, s["source"], s["path"]]))' "$SKILLS_MANIFEST")
+    print("\t".join([name, s["source"], s["path"], s["folderHash"], m["sources"][s["source"]]["commit"]]))' "$SKILLS_MANIFEST")
 
   if [ "$DRY_RUN" = "1" ]; then plan "copy $count skills into $root"; else ok "$count skills in $root"; fi
 }
