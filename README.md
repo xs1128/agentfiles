@@ -147,6 +147,12 @@ Variants of a single agent are **profiles**, not branches, for the same reason:
 | `pi/models.json` | **render** | Holds the z.ai API key. Written to disk at `600`, never a repo file |
 | skills | symlink from one shared copy | A skill exists once, however many agents see it |
 
+Symlinks carry writes in both directions. `claude/settings.json` *is* the file
+Claude Code edits, so picking a model with `/model` writes straight into this
+repo's working tree — the committed `"model": "opus[1m]"` arrived that way, not
+by hand. Check `git status` before `git add -A`, or an interactive choice rides
+along inside an unrelated commit.
+
 MCP servers reach the two agents by different routes for the same reason. Claude
 keeps them in `~/.claude.json`, which it rewrites itself, so `claude/mcp.json`
 holds the definitions and `install.sh` applies them with `claude mcp add-json`.
