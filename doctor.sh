@@ -44,24 +44,36 @@ check_dead_links() {
   fi
 }
 
-check_skill_count() {
-  local dir="$1" expected="$2" label="$3"
-  dir="$(expand_tilde "$dir")"
-  [ -d "$dir" ] || { bad "$dir missing"; return; }
-  local actual; actual="$(find "$dir" -maxdepth 1 -mindepth 1 | wc -l | tr -d ' ')"
-  if [ "$actual" -lt "$expected" ]; then
-    bad "$label: $actual present, manifest expects at least $expected"
-  else
-    ok "$label: $actual skills"
-  fi
-}
+# A name-set diff, not a count. A floor passed with one missing and one stray,
+# and an exact count would need a per-agent fudge constant: claude also holds
+# workflow.md/.ts and codex owns a .system dotdir. Extra names an agent is
+# expected to carry are passed as trailing arguments.
+check_skill_set() {
+  local dir label; dir="$(expand_tilde "$1")"; label="$2"; shift 2
+  [ -d "$dir" ] || { bad "$label: $dir missing"; return; }
 
-# Claude and Codex both take the third-party and wiki populations; pi takes only
-# the former. shared/skills/ is not counted — check_skill_count is a floor.
-third_party_and_wiki_count() {
-  python3 -c 'import json,sys
-a=len(json.load(open(sys.argv[1]))["skills"]);b=len(json.load(open(sys.argv[2]))["skills"]);print(a+b)' \
-    "$SKILLS_MANIFEST" "$WIKI_MANIFEST"
+  local expected actual missing extra
+  expected="$( { python3 - "$SKILLS_MANIFEST" "$WIKI_MANIFEST" "$REPO_ROOT" "$dir" <<'PY'
+import json, os, sys
+skills_m, wiki_m, repo, dest = sys.argv[1:5]
+names = set(json.load(open(skills_m))["skills"])
+wiki = json.load(open(wiki_m))
+if dest in [os.path.expanduser(p) for p in wiki["linkInto"]]:
+    names |= set(wiki["skills"])
+shared = os.path.join(repo, "shared", "skills")
+names |= {n for n in os.listdir(shared) if os.path.isdir(os.path.join(shared, n))}
+print("\n".join(names))
+PY
+    printf '%s\n' "$@"; } | grep -v '^$' | sort)"
+  actual="$(find "$dir" -maxdepth 1 -mindepth 1 ! -name '.*' -exec basename {} \; | sort)"
+
+  missing="$(comm -23 <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") | tr '\n' ' ')"
+  extra="$(comm -13 <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") | tr '\n' ' ')"
+  if [ -n "$missing" ] || [ -n "$extra" ]; then
+    bad "$label:${missing:+ missing: $missing}${extra:+ extra: $extra}"
+  else
+    ok "$label: $(printf '%s\n' "$actual" | wc -l | tr -d ' ') skills, exactly as manifested"
+  fi
 }
 
 DO_CLAUDE=0; DO_CODEX=0; DO_PI=0
@@ -137,6 +149,16 @@ else
   skip "nothing rendered or backed up yet"
 fi
 
+# Every third-party skill symlink in every agent points into this one tree.
+step "Shared skill tree"
+SKILL_ROOT="$(expand_tilde "$(jget "$SKILLS_MANIFEST" installRoot)")"
+if [ ! -d "$SKILL_ROOT" ]; then
+  bad "$SKILL_ROOT missing — run ./install.sh"
+else
+  n="$(find "$SKILL_ROOT" -maxdepth 1 -mindepth 1 ! -name '.*' | wc -l | tr -d ' ')"
+  [ "$n" -gt 0 ] && ok "$SKILL_ROOT: $n skills" || bad "$SKILL_ROOT is empty — run ./install.sh"
+fi
+
 if [ "$DO_CLAUDE" = 1 ]; then
   step "Claude Code"
   for pair in "agents:agents" "workflows:workflows" "CLAUDE.md:CLAUDE.md" "RTK.md:RTK.md" \
@@ -144,8 +166,11 @@ if [ "$DO_CLAUDE" = 1 ]; then
               "hud-statusline.sh:hud-statusline.sh"; do
     check_link "$REPO_ROOT/claude/${pair%%:*}" "$CLAUDE_HOME/${pair##*:}"
   done
+  for f in workflow.md workflow.ts; do
+    check_link "$REPO_ROOT/claude/skills/$f" "$CLAUDE_HOME/skills/$f"
+  done
   check_dead_links "$CLAUDE_HOME/skills"
-  check_skill_count "$CLAUDE_HOME/skills" "$(third_party_and_wiki_count)" "claude skills"
+  check_skill_set "$CLAUDE_HOME/skills" "claude skills" workflow.md workflow.ts
   # The three mandatory pieces: rtk (host binary), caveman + claude-hud (plugins).
   # `rtk gain`, not `have rtk`: reachingforthejack/rtk owns the same name and has
   # no `gain` subcommand — see claude/RTK.md.
@@ -194,7 +219,7 @@ if [ "$DO_CODEX" = 1 ]; then
   step "Codex"
   check_link "$REPO_ROOT/codex/AGENTS.md" "$CODEX_HOME/AGENTS.md"
   check_dead_links "$CODEX_HOME/skills"
-  check_skill_count "$CODEX_HOME/skills" "$(third_party_and_wiki_count)" "codex skills"
+  check_skill_set "$CODEX_HOME/skills" "codex skills"
 
   # AGENTS.md is the only thing telling Codex to use rtk — it gets no hook.
   rtk gain >/dev/null 2>&1 || bad "rtk missing or not the token killer — codex/AGENTS.md tells the model to prefix every shell command with it"
@@ -232,9 +257,7 @@ if [ "$DO_PI" = 1 ]; then
     bad "$PI_HOME/models.json missing — run ./install.sh --pi"
   fi
   check_dead_links "$PI_HOME/skills"
-  check_skill_count "$PI_HOME/skills" \
-    "$(python3 -c 'import json,sys;print(len(json.load(open(sys.argv[1]))["skills"]))' "$SKILLS_MANIFEST")" \
-    "pi skills"
+  check_skill_set "$PI_HOME/skills" "pi skills"
 fi
 
 echo
