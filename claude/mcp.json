@@ -8,7 +8,7 @@
         "command": "npx",
         "args": [
           "-y",
-          "firebase-tools@latest",
+          "firebase-tools@15.25.1",
           "mcp",
           "--dir",
           "."
@@ -25,7 +25,7 @@
         "command": "npx",
         "args": [
           "-y",
-          "@playwright/mcp@latest"
+          "@playwright/mcp@0.0.78"
         ]
       },
       "why": "browser automation as tool calls. Note the playwright-skill plugin never provided this — it only wrote Playwright scripts to /tmp"

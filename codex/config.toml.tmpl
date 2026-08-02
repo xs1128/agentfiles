@@ -22,14 +22,14 @@ url = "https://mcp.figma.com/mcp"
 # session is in.
 [mcp_servers.firebase]
 command = "npx"
-args = ["-y", "firebase-tools@latest", "mcp", "--dir", "."]
+args = ["-y", "firebase-tools@15.25.1", "mcp", "--dir", "."]
 
 [mcp_servers.firebase.env]
 IS_FIREBASE_MCP = "true"
 
 [mcp_servers.playwright]
 command = "npx"
-args = ["-y", "@playwright/mcp@latest"]
+args = ["-y", "@playwright/mcp@0.0.78"]
 
 [desktop]
 conversationDetailMode = "STEPS_COMMANDS"
