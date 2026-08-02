@@ -30,6 +30,20 @@ def deep_merge(base: dict, over: dict) -> dict:
     return out
 
 
+def changed_leaves(managed: dict, existing, prefix: str = "") -> list[str]:
+    """Managed leaves that differ. Sub-tables the target holds and the managed
+    subset does not are Codex's own and are not drift."""
+    out: list[str] = []
+    for key, val in managed.items():
+        path = prefix + key
+        cur = existing.get(key) if isinstance(existing, dict) else None
+        if isinstance(val, dict):
+            out.extend(changed_leaves(val, cur, path + "."))
+        elif cur != val:
+            out.append(path)
+    return out
+
+
 def fmt_key(key: str) -> str:
     return key if key and all(c in BARE_OK for c in key) else '"%s"' % key.replace('"', '\\"')
 
@@ -107,9 +121,9 @@ def main() -> int:
         return 0
 
     body = "\n".join(dump(merged)).rstrip() + "\n"
-    changed = sorted(k for k in managed if existing.get(k) != managed.get(k))
+    changed = sorted(changed_leaves(managed, existing))
     if dry_run:
-        print("would merge into %s (top-level keys: %s)" % (target_path, ", ".join(changed)))
+        print("would merge into %s (keys: %s)" % (target_path, ", ".join(changed)))
         return 0
 
     # Read the serialized form back before committing to it. Turns any future
