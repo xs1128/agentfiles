@@ -87,8 +87,8 @@ step "Secrets"
 if [ -f "$SECRETS_FILE" ]; then
   mode="$(stat -f '%Lp' "$SECRETS_FILE" 2>/dev/null || stat -c '%a' "$SECRETS_FILE")"
   [ "$mode" = "600" ] && ok "$SECRETS_FILE (600)" || bad "$SECRETS_FILE is mode $mode, want 600"
-  set -a; . "$SECRETS_FILE"; set +a
-  [ -n "${ZAI_API_KEY:-}" ] && ok "ZAI_API_KEY set" || warn "ZAI_API_KEY unset"
+  ZAI_API_KEY="$(secret_value "$SECRETS_FILE" ZAI_API_KEY)"
+  [ -n "$ZAI_API_KEY" ] && ok "ZAI_API_KEY set" || warn "ZAI_API_KEY unset"
 else
   warn "$SECRETS_FILE absent — run ./install.sh to scaffold it"
 fi

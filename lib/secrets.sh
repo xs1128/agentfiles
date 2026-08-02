@@ -8,6 +8,24 @@ SECRET_VARS=(
   "ZAI_API_KEY:z.ai coding-plan key. Used by both the Claude GLM profile and pi's zai provider."
 )
 
+# Read one named key out of the secrets file without executing it.
+# Accepted form: `[export ]KEY=value`, value optionally wrapped in one layer of
+# matching ' or " quotes; the last line naming a key wins.
+secret_value() {
+  local file="$1" key="$2" line val=""
+  [ -f "$file" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line#export }"
+    case "$line" in "$key"=*) val="${line#*=}" ;; *) continue ;; esac
+    case "$val" in
+      \"*\") val="${val#\"}"; val="${val%\"}" ;;
+      \'*\') val="${val#\'}"; val="${val%\'}" ;;
+    esac
+  done < "$file"
+  printf '%s' "$val"
+}
+
 # Write a skeleton on first run, then stop: filling it in is a human step.
 scaffold_secrets() {
   step "Secrets"
