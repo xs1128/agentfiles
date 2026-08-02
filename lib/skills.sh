@@ -80,7 +80,9 @@ for name,s in m["sources"].items():
 
     # Hash "$commit:$path", not "HEAD:$path": if the checkout above failed this
     # would otherwise verify whatever tree the clone happens to be sitting on.
-    local got; got="$(git -C "$dir" rev-parse "$commit:$path" 2>/dev/null)"
+    # `|| true`: a bare assignment takes the substitution's status, and rev-parse
+    # exits 128 when the pinned commit is not in the clone.
+    local got; got="$(git -C "$dir" rev-parse "$commit:$path" 2>/dev/null || true)"
     if [ "$got" != "$want" ]; then
       warn "$name: tree $got does not match folderHash $want — skipped"
       FAILURES=$((FAILURES + 1))
@@ -117,12 +119,14 @@ install_wiki_skills() {
     ok "cloned $repo -> $checkout"
   else
     # Actively edited: never reset it, just report drift.
-    local dirty; dirty="$(git -C "$checkout" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+    # `|| true`: a bare assignment takes the substitution's status; HEAD is unborn
+    # in a freshly `git init`ed checkout, where rev-parse exits 128.
+    local dirty; dirty="$(git -C "$checkout" status --porcelain 2>/dev/null | wc -l | tr -d ' ' || true)"
     ok "$checkout present${dirty:+ ($dirty uncommitted file(s))}"
 
     local head want
-    head="$(git -C "$checkout" rev-parse HEAD 2>/dev/null)"
-    want="$(jget "$WIKI_MANIFEST" commit)"
+    head="$(git -C "$checkout" rev-parse HEAD 2>/dev/null || true)"
+    want="$(jget "$WIKI_MANIFEST" commit || true)"
     if [ "$head" != "$want" ]; then
       warn "$checkout is at ${head:0:12}, wiki.json pins ${want:0:12} — bump the pin once you are happy with it"
     fi
