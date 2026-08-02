@@ -1,0 +1,22 @@
+# This repo holds hand-authored config only. It no longer lives inside an agent
+# home, so the old allowlist-everything-out approach is gone — there is simply
+# no runtime state here to exclude.
+
+# Secrets. Every credential is rendered locally from a *.tmpl at install time.
+*.env
+!*.env.example
+agent-secrets*
+pi/models.json
+claude/profiles/*/settings.json
+
+# Installer scratch
+.cache/
+*.log
+
+# Build artefacts and per-machine agent state
+tui/tui
+.claude/settings.local.json
+
+# macOS
+.DS_Store
+__pycache__/

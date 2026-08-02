@@ -1,0 +1,63 @@
+# The subset of ~/.codex/config.toml this repo owns. install.sh merges these in;
+# it never overwrites the file. Left untouched because they hold machine-local
+# paths or per-repo decisions: notify, [marketplaces.*], [mcp_servers.node_repl],
+# [mcp_servers.computer-use], [shell_environment_policy], [projects.*], [tui.*]
+#
+# [features] is deliberately absent: it used to pin js_repl = false, but
+# `codex features list` now reports js_repl as `removed`. A merge only ever adds
+# or overrides keys, so dropping it here leaves whatever Codex wrote alone.
+
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+approvals_reviewer = "user"
+
+# Same three servers Claude gets. Claude needs claude/mcp.json + `claude mcp
+# add-json` because it stores MCP definitions in ~/.claude.json, which it
+# rewrites itself; Codex keeps them in config.toml, so the merge already in
+# place covers them and no CLI call is needed.
+[mcp_servers.figma]
+url = "https://mcp.figma.com/mcp"
+
+# `--dir .` resolves the project from the cwd, so it follows whichever repo the
+# session is in.
+[mcp_servers.firebase]
+command = "npx"
+args = ["-y", "firebase-tools@latest", "mcp", "--dir", "."]
+
+[mcp_servers.firebase.env]
+IS_FIREBASE_MCP = "true"
+
+[mcp_servers.playwright]
+command = "npx"
+args = ["-y", "@playwright/mcp@latest"]
+
+[desktop]
+conversationDetailMode = "STEPS_COMMANDS"
+sansFontSize = 14
+codeFontSize = 13
+ambient-suggestions-enabled = false
+followUpQueueMode = "queue"
+
+[plugins."browser@openai-bundled"]
+enabled = true
+
+[plugins."visualize@openai-bundled"]
+enabled = true
+
+[plugins."sites@openai-bundled"]
+enabled = true
+
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."pdf@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."template-creator@openai-primary-runtime"]
+enabled = true

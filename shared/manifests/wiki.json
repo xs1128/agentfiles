@@ -1,0 +1,30 @@
+{
+  "$comment": "Personally-authored skills living in the xs-llm-wiki repo. Cloned as a live working checkout, then symlinked per-skill.",
+  "repo": "https://github.com/xs1128/xs-llm-wiki.git",
+  "commit": "0298c2a98900a02bff4d98d949212c1fcb1a0e00",
+  "checkout": "~/Desktop/xs",
+  "trackBranch": "main",
+  "skillsSubdir": "skills",
+  "linkInto": [
+    "~/.claude/skills",
+    "~/.codex/skills"
+  ],
+  "skills": [
+    "autoresearch",
+    "canvas",
+    "defuddle",
+    "finance-export",
+    "obsidian-bases",
+    "obsidian-markdown",
+    "save",
+    "think",
+    "wiki",
+    "wiki-cli",
+    "wiki-fold",
+    "wiki-ingest",
+    "wiki-lint",
+    "wiki-mode",
+    "wiki-query",
+    "wiki-retrieve"
+  ]
+}

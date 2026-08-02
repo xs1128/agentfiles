@@ -1,0 +1,37 @@
+{
+  "$comment": "Claude plugins. settings.json's enabledPlugins would fetch these on next launch anyway; install.sh does it up front so a fresh machine works on first run. `commit` records what this machine has — bump it, re-run, and the diff is reviewable.",
+  "$required": "caveman and claude-hud are non-negotiable: caveman is the response-compression mode and claude-hud is the statusline. doctor.sh fails if either is absent. The third mandatory piece, rtk, is a host binary — see shared/manifests/deps.json.",
+  "$notPlugins": "firebase and playwright are deliberately absent. Both were installed as plugins, but only their tools are wanted, not their skills — see claude/mcp.json.",
+  "marketplaces": {
+    "caveman": "JuliusBrussee/caveman",
+    "claude-hud": "jarrodwatts/claude-hud",
+    "ui-ux-pro-max-skill": "nextlevelbuilder/ui-ux-pro-max-skill",
+    "claude-plugins-official": "anthropics/claude-plugins-official"
+  },
+  "plugins": {
+    "caveman@caveman": {
+      "version": "63e797cd753b",
+      "commit": "63e797cd753b301374947a5ed975c21775d962b9",
+      "required": true,
+      "why": "token-compression response mode; also owns the caveman-statusline badge used by claude/statusline.sh"
+    },
+    "claude-hud@claude-hud": {
+      "version": "0.3.0",
+      "commit": "b83b44593af24de1db6183788a51d08715501c02",
+      "required": true,
+      "why": "the statusline; rendered by claude/hud-statusline.sh, needs bun"
+    },
+    "ui-ux-pro-max@ui-ux-pro-max-skill": {
+      "version": "2.5.0",
+      "commit": "b7e3af80f6e331f6fb456667b82b12cade7c9d35"
+    },
+    "figma@claude-plugins-official": {
+      "version": "2.2.78",
+      "commit": "aa1d073884af0db2e69a7b31957513f3d3cc6503"
+    },
+    "swift-lsp@claude-plugins-official": {
+      "version": "1.0.0",
+      "commit": "19c8d1d9c2723cafd28c77d3e508ac308a29a029"
+    }
+  }
+}

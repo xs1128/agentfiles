@@ -1,0 +1,23 @@
+{
+  "providers": {
+    "zai": {
+      "baseUrl": "https://api.z.ai/api/coding/paas/v4",
+      "api": "openai-completions",
+      "apiKey": "${ZAI_API_KEY}",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "thinkingFormat": "zai"
+      },
+      "models": [
+        {
+          "id": "glm-5.1",
+          "name": "GLM-5.1",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 128000,
+          "maxTokens": 4096
+        }
+      ]
+    }
+  }
+}
