@@ -89,6 +89,13 @@ for name,s in m["sources"].items():
       continue
     fi
 
+    # Untracked files live in no tree, so folderHash cannot see them.
+    if [ -n "$(git -C "$dir" status --porcelain -- "$path" 2>/dev/null)" ]; then
+      warn "$name: worktree differs from the pinned tree — skipped"
+      FAILURES=$((FAILURES + 1))
+      continue
+    fi
+
     # An empty installRoot from a malformed manifest would make this `rm -rf /$name`.
     if [ -z "$root" ] || [ -z "$name" ]; then
       warn "skills.json: empty installRoot or name — refusing to remove $to"
