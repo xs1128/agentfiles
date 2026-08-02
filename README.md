@@ -267,6 +267,11 @@ commit flag and always fetches latest, so all the installer can do is read the
 `installed_plugins.json` and compare. A mismatch is a warning telling you to bump
 the pin — reinstalling would just refetch latest, so it cannot fix anything.
 
+Only the three marketplaces that are genuine git clones carry a `commit`. The
+`claude-plugins-official` ones are fetched as a tarball, and the `gitCommitSha`
+recorded for them is not an upstream identity — see `$noCommit` in
+`claude/plugins.json` — so those two entries are pinned by `version` alone.
+
 The wiki is the exception: it is a live checkout you edit, so it is never reset.
 Its `commit` is a drift warning only.
 

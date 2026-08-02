@@ -2,6 +2,7 @@
   "$comment": "Claude plugins. settings.json's enabledPlugins would fetch these on next launch anyway; install.sh does it up front so a fresh machine works on first run. `commit` records what this machine has — bump it, re-run, and the diff is reviewable.",
   "$required": "caveman and claude-hud are non-negotiable: caveman is the response-compression mode and claude-hud is the statusline. doctor.sh fails if either is absent. The third mandatory piece, rtk, is a host binary — see shared/manifests/deps.json.",
   "$notPlugins": "firebase and playwright are deliberately absent. Both were installed as plugins, but only their tools are wanted, not their skills — see claude/mcp.json.",
+  "$noCommit": "The claude-plugins-official entries carry no `commit`. That marketplace is fetched as a tarball, not cloned — its dir has a .gcs-sha and no .git — so the gitCommitSha Claude Code recorded for them is not an upstream identity at all: resolving HEAD from inside the install dir walked up into ~/.claude and captured that repo's own HEAD. A pin that can only ever match the machine it was written on enforces nothing, so there is nothing to record.",
   "marketplaces": {
     "caveman": "JuliusBrussee/caveman",
     "claude-hud": "jarrodwatts/claude-hud",
@@ -26,12 +27,10 @@
       "commit": "b7e3af80f6e331f6fb456667b82b12cade7c9d35"
     },
     "figma@claude-plugins-official": {
-      "version": "2.2.78",
-      "commit": "aa1d073884af0db2e69a7b31957513f3d3cc6503"
+      "version": "2.2.78"
     },
     "swift-lsp@claude-plugins-official": {
-      "version": "1.0.0",
-      "commit": "19c8d1d9c2723cafd28c77d3e508ac308a29a029"
+      "version": "1.0.0"
     }
   }
 }
