@@ -173,7 +173,7 @@ else
   else
     printf '%s\n' "${C_GRN}done${C_OFF}"
   fi
-  printf '%s\n' "      backups (if any): $BACKUP_DIR"
+  if [ -d "$BACKUP_DIR" ]; then printf '%s\n' "      backups: $BACKUP_DIR"; fi
   printf '%s\n' "      verify with: ./doctor.sh"
   if [ "$FAILURES" -gt 0 ]; then exit 1; fi
 fi
