@@ -153,6 +153,12 @@ install_pi() {
 if [ "$DRY_RUN" = "1" ]; then
   printf '%s\n' "${C_YEL}dry run complete — re-run without --dry-run to apply${C_OFF}"
 else
-  printf '%s\n' "${C_GRN}done${C_OFF}  backups (if any): $BACKUP_DIR"
+  if [ "$FAILURES" -gt 0 ]; then
+    printf '%s\n' "${C_RED}$FAILURES failure(s)${C_OFF} — see the warn lines above"
+  else
+    printf '%s\n' "${C_GRN}done${C_OFF}"
+  fi
+  printf '%s\n' "      backups (if any): $BACKUP_DIR"
   printf '%s\n' "      verify with: ./doctor.sh"
+  if [ "$FAILURES" -gt 0 ]; then exit 1; fi
 fi

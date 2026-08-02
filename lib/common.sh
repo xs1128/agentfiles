@@ -4,6 +4,7 @@
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 BACKUP_DIR="${BACKUP_DIR:-$HOME/.agent-config-backups/$(date +%Y%m%d-%H%M%S)}"
 DRY_RUN="${DRY_RUN:-0}"
+FAILURES=0   # non-fatal problems; the run finishes, then exits non-zero
 
 C_DIM=$'\033[38;5;240m'; C_RED=$'\033[38;5;203m'; C_YEL=$'\033[38;5;220m'
 C_GRN=$'\033[38;5;71m'; C_BLD=$'\033[1m'; C_OFF=$'\033[0m'
@@ -41,7 +42,13 @@ backup_path() {
 link() {
   local src="$1" dst="$2"
   src="$(expand_tilde "$src")"; dst="$(expand_tilde "$dst")"
-  [ -e "$src" ] || { warn "link source missing: $src"; return 1; }
+  if [ ! -e "$src" ]; then
+    warn "link source missing: $src"
+    # Returning non-zero here killed the whole run under `set -e`. A dry run on a
+    # fresh machine has no shared skill tree yet, so that case is not a failure.
+    [ "$DRY_RUN" = "1" ] || FAILURES=$((FAILURES + 1))
+    return 0
+  fi
 
   if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
     skip "$dst (already linked)"
