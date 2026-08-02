@@ -99,7 +99,16 @@ func (m model) agentFlags() []string {
 
 func (m model) anyAgent() bool { return len(m.agentFlags()) > 0 }
 
-func (m model) claudeSelected() bool { return m.agents[0].on }
+// By key, not position: reordering the agents slice would otherwise silently
+// gate the profile step on the wrong agent.
+func (m model) claudeSelected() bool {
+	for _, c := range m.agents {
+		if c.key == "--claude" {
+			return c.on
+		}
+	}
+	return false
+}
 
 func (m model) profileName() string {
 	for _, c := range m.profile {
