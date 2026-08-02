@@ -119,7 +119,12 @@ install_codex() {
   local args=("$REPO_ROOT/codex/config.toml.tmpl" "$CODEX_HOME/config.toml")
   [ "$DRY_RUN" = "1" ] && args+=(--dry-run)
   [ -f "$CODEX_HOME/config.toml" ] && [ "$DRY_RUN" != "1" ] && backup_path_copy "$CODEX_HOME/config.toml"
-  python3 "$REPO_ROOT/lib/toml_merge.py" "${args[@]}" | sed 's/^/  /'
+  # Unguarded, `set -o pipefail` turned any traceback here into an aborted run,
+  # so a malformed config.toml meant pi never got installed.
+  if ! python3 "$REPO_ROOT/lib/toml_merge.py" "${args[@]}" | sed 's/^/  /'; then
+    warn "codex config merge failed — $CODEX_HOME/config.toml left as it was"
+    FAILURES=$((FAILURES + 1))
+  fi
 }
 
 # Copy aside, not move: the merge needs the original in place.
