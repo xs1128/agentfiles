@@ -22,7 +22,7 @@
         "why": "the agent itself"
       },
       "rtk": {
-        "check": "rtk --version",
+        "check": "rtk gain",
         "install": "brew install rtk",
         "why": "PreToolUse hook in claude/settings.json rewrites Bash calls through it"
       },
@@ -39,7 +39,7 @@
         "why": "the agent itself"
       },
       "rtk": {
-        "check": "rtk --version",
+        "check": "rtk gain",
         "install": "brew install rtk",
         "why": "codex/AGENTS.md instructs the model to prefix shell commands with it. Unlike Claude there is no hook, so a missing binary means every command fails rather than silently skipping the proxy"
       }
