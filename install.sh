@@ -127,9 +127,17 @@ install_codex() {
   fi
 }
 
-# Copy aside, not move: the merge needs the original in place.
+# Copy aside, not move: the merge needs the original in place. Unchanged since
+# the newest archived copy means an idempotent re-run — nothing new to keep.
 backup_path_copy() {
-  local dest="$BACKUP_DIR/${1#"$HOME"/}"
+  local rel="${1#"$HOME"/}"
+  local dest="$BACKUP_DIR/$rel" newest
+  # `|| true`: with pipefail, find failing on a not-yet-created root would abort.
+  newest="$(find "$BACKUP_ROOT" -mindepth 2 -path "*/$rel" -type f 2>/dev/null | sort | tail -1 || true)"
+  if [ -n "$newest" ] && cmp -s "$1" "$newest"; then
+    skip "$1 (unchanged since $newest)"
+    return 0
+  fi
   # Its own statement: `mkdir -p -m` only modes the deepest component.
   mkdir -p -m 700 "$BACKUP_DIR"
   mkdir -p "$(dirname "$dest")"
@@ -154,6 +162,8 @@ install_pi() {
 [ "$DO_CLAUDE" = 1 ] && { install_claude; echo; }
 [ "$DO_CODEX"  = 1 ] && { install_codex;  echo; }
 [ "$DO_PI"     = 1 ] && { install_pi;     echo; }
+
+[ "$DRY_RUN" = "1" ] || prune_backups
 
 if [ "$DRY_RUN" = "1" ]; then
   printf '%s\n' "${C_YEL}dry run complete — re-run without --dry-run to apply${C_OFF}"

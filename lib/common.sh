@@ -25,17 +25,35 @@ run() {
 
 expand_tilde() { printf '%s' "${1/#\~/$HOME}"; }
 
-# Move an existing path into this run's backup dir, keeping its layout.
+BACKUP_ROOT="${BACKUP_ROOT:-$HOME/.agent-config-backups}"
+BACKUP_KEEP=10
+
+# Move an existing path into this run's backup dir, keeping its layout. Pass the
+# incoming replacement as $2 and a byte-identical target is dropped, not archived
+# — that is what stops the tree growing on every idempotent re-run.
 backup_path() {
-  local target="$1"
+  local target="$1" incoming="${2:-}"
   [ -e "$target" ] || [ -L "$target" ] || return 0
   local dest="$BACKUP_DIR/${target#"$HOME"/}"
   if [ "$DRY_RUN" = "1" ]; then plan "back up $target -> $dest"; return 0; fi
+  if [ -n "$incoming" ] && cmp -s "$target" "$incoming"; then
+    rm -rf "$target"
+    return 0
+  fi
   # Its own statement: `mkdir -p -m` only modes the deepest component.
   mkdir -p -m 700 "$BACKUP_DIR"
   mkdir -p "$(dirname "$dest")"
   mv "$target" "$dest"
   info "backed up $target -> $dest"
+}
+
+# Keep the newest BACKUP_KEEP runs; the timestamped names sort chronologically.
+prune_backups() {
+  [ -d "$BACKUP_ROOT" ] || return 0
+  local dir
+  find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+    | sort -r | tail -n "+$((BACKUP_KEEP + 1))" \
+    | while IFS= read -r dir; do rm -rf "$dir"; done
 }
 
 # Symlink src -> dst. Already correct: skip. Anything else: back up first.
@@ -54,7 +72,7 @@ link() {
     skip "$dst (already linked)"
     return 0
   fi
-  backup_path "$dst"
+  backup_path "$dst" "$src"
   run mkdir -p "$(dirname "$dst")"
   run ln -s "$src" "$dst"
   [ "$DRY_RUN" = "1" ] || ok "$dst -> $src"
