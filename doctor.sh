@@ -13,6 +13,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 PI_HOME="${PI_HOME:-$HOME/.pi/agent}"
+GLM_HOME="${GLM_HOME:-$HOME/.claude-glm}"
 SKILLS_MANIFEST="$REPO_ROOT/shared/manifests/skills.json"
 WIKI_MANIFEST="$REPO_ROOT/shared/manifests/wiki.json"
 
@@ -77,10 +78,13 @@ done
 printf '%s\n\n' "${C_BLD}agent-config doctor${C_OFF} ${C_DIM}$REPO_ROOT${C_OFF}"
 
 step "Repo"
-if git -C "$REPO_ROOT" diff --quiet 2>/dev/null; then
+# --porcelain, not `git diff`: the latter only sees the index, so an entirely
+# untracked tree reads as clean.
+dirty="$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+if [ "$dirty" = 0 ]; then
   ok "clean working tree"
 else
-  warn "uncommitted changes in repo ($(git -C "$REPO_ROOT" status --porcelain | wc -l | tr -d ' ') file(s))"
+  warn "uncommitted changes in repo ($dirty file(s))"
 fi
 
 step "Secrets"
@@ -93,11 +97,44 @@ else
   warn "$SECRETS_FILE absent — run ./install.sh to scaffold it"
 fi
 
+# Value classes rather than a bare `KEY=`, so this file does not match itself.
+SECRET_RE='(sk-[A-Za-z0-9]{20,}|[0-9a-f]{32}\.[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}'
+SECRET_RE="$SECRET_RE"'|xoxb-[A-Za-z0-9-]{10,}|AKIA[A-Z0-9]{16}|AIza[A-Za-z0-9_-]{30,}'
+SECRET_RE="$SECRET_RE"'|glpat-[A-Za-z0-9_-]{16,}|eyJ[A-Za-z0-9_-]{10,}\.'
+SECRET_RE="$SECRET_RE"'|ANTHROPIC_AUTH_TOKEN=[A-Za-z0-9_.-]{12,})'
+
+# grep the working tree, not `git grep`: git grep reads the index, so nothing
+# staged means nothing scanned.
+scan_for_secrets() {
+  local label="$1"; shift
+  local hits
+  hits="$(grep -rlIE --exclude-dir=.git "$SECRET_RE" "$@" 2>/dev/null)"
+  if [ -n "${ZAI_API_KEY:-}" ]; then
+    hits="$hits
+$(grep -rlIF --exclude-dir=.git "$ZAI_API_KEY" "$@" 2>/dev/null)"
+  fi
+  hits="$(printf '%s\n' "$hits" | grep -v '^$' | sort -u)"
+  if [ -n "$hits" ]; then
+    bad "$label: credential-shaped string in $(printf '%s' "$hits" | tr '\n' ' ')"
+  else
+    ok "$label: clean"
+  fi
+}
+
 step "No secrets in repo"
-if git -C "$REPO_ROOT" grep -nIE '(sk-[A-Za-z0-9]{20,}|[0-9a-f]{32}\.[A-Za-z0-9]{16,})' -- . >/dev/null 2>&1; then
-  bad "possible credential committed — inspect: git grep -nIE '(sk-[A-Za-z0-9]{20,}|[0-9a-f]{32}\\.[A-Za-z0-9]{16,})'"
+scan_for_secrets "working tree" "$REPO_ROOT"
+
+# The repo only ever holds ${VAR} placeholders; the rendered configs and the
+# backup tree are where a real key would actually sit.
+step "No secrets in rendered configs or backups"
+SECRET_TARGETS=()
+[ -f "$PI_HOME/models.json" ]     && SECRET_TARGETS+=("$PI_HOME/models.json")
+[ -f "$GLM_HOME/settings.json" ]  && SECRET_TARGETS+=("$GLM_HOME/settings.json")
+[ -d "$HOME/.agent-config-backups" ] && SECRET_TARGETS+=("$HOME/.agent-config-backups")
+if [ ${#SECRET_TARGETS[@]} -gt 0 ]; then
+  scan_for_secrets "rendered/backups" "${SECRET_TARGETS[@]}"
 else
-  ok "no API-key-shaped strings tracked"
+  skip "nothing rendered or backed up yet"
 fi
 
 if [ "$DO_CLAUDE" = 1 ]; then
