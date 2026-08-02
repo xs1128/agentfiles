@@ -10,6 +10,8 @@ tomllib; writes with a small serializer covering the subset these configs use.
 
 from __future__ import annotations
 
+import datetime
+import json
 import sys
 import tomllib
 from pathlib import Path
@@ -38,19 +40,35 @@ def fmt_val(val) -> str:
     if isinstance(val, (int, float)):
         return repr(val)
     if isinstance(val, str):
-        return '"%s"' % val.replace("\\", "\\\\").replace('"', '\\"')
+        # JSON string escaping is a subset of TOML's. ensure_ascii=False is
+        # required: the default emits surrogate pairs for astral characters
+        # (emoji), which tomllib rejects.
+        return json.dumps(val, ensure_ascii=False)
+    if isinstance(val, (datetime.datetime, datetime.date, datetime.time)):
+        return val.isoformat()
     if isinstance(val, list):
         return "[" + ", ".join(fmt_val(v) for v in val) + "]"
     raise TypeError("unsupported TOML value: %r" % (val,))
 
 
-def dump(data: dict, prefix: tuple[str, ...] = ()) -> list[str]:
-    """Scalars at this level first, then recurse into sub-tables."""
-    lines: list[str] = []
-    scalars = {k: v for k, v in data.items() if not isinstance(v, dict)}
-    tables = {k: v for k, v in data.items() if isinstance(v, dict)}
+def is_table_array(val) -> bool:
+    return isinstance(val, list) and bool(val) and all(isinstance(v, dict) for v in val)
 
-    if scalars and prefix:
+
+def dump(data: dict, prefix: tuple[str, ...] = (), header: bool = True) -> list[str]:
+    """Scalars at this level first, then sub-tables, then arrays of tables."""
+    lines: list[str] = []
+    scalars, tables, arrays = {}, {}, {}
+    for key, val in data.items():
+        if isinstance(val, dict):
+            tables[key] = val
+        elif is_table_array(val):
+            arrays[key] = val
+        else:
+            scalars[key] = val
+
+    # header=False: the caller already emitted an [[array]] line for this table.
+    if scalars and prefix and header:
         lines.append("[%s]" % ".".join(fmt_key(p) for p in prefix))
     for key, val in scalars.items():
         lines.append("%s = %s" % (fmt_key(key), fmt_val(val)))
@@ -63,6 +81,12 @@ def dump(data: dict, prefix: tuple[str, ...] = ()) -> list[str]:
             lines.append("[%s]" % ".".join(fmt_key(p) for p in prefix + (key,)))
             lines.append("")
         lines.extend(dump(val, prefix + (key,)))
+
+    for key, val in arrays.items():
+        path = ".".join(fmt_key(p) for p in prefix + (key,))
+        for item in val:
+            lines.append("[[%s]]" % path)
+            lines.extend(dump(item, prefix + (key,), header=False))
     return lines
 
 
@@ -87,6 +111,20 @@ def main() -> int:
     if dry_run:
         print("would merge into %s (top-level keys: %s)" % (target_path, ", ".join(changed)))
         return 0
+
+    # Read the serialized form back before committing to it. Turns any future
+    # gap in the serializer above into a refusal instead of a corrupted config.
+    try:
+        reread = tomllib.loads(body)
+    except tomllib.TOMLDecodeError as exc:
+        print("refusing to write %s: serializer emitted invalid TOML (%s)" % (target_path, exc),
+              file=sys.stderr)
+        return 1
+    if reread != merged:
+        lost = sorted(k for k in set(reread) | set(merged) if reread.get(k) != merged.get(k))
+        print("refusing to write %s: serializer lost data at %s" % (target_path, ", ".join(lost)),
+              file=sys.stderr)
+        return 1
 
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_text(body)
