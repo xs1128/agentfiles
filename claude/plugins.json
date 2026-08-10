@@ -1,13 +1,12 @@
 {
-  "$comment": "Claude plugins. settings.json's enabledPlugins would fetch these on next launch anyway; install.sh does it up front so a fresh machine works on first run. `commit` records what this machine has — bump it, re-run, and the diff is reviewable.",
-  "$required": "caveman and claude-hud are non-negotiable: caveman is the response-compression mode and claude-hud is the statusline. doctor.sh fails if either is absent. The third mandatory piece, rtk, is a host binary — see shared/manifests/deps.json.",
-  "$notPlugins": "firebase and playwright are deliberately absent. Both were installed as plugins, but only their tools are wanted, not their skills — see claude/mcp.json.",
-  "$noCommit": "The claude-plugins-official entries carry no `commit`. That marketplace is fetched as a tarball, not cloned — its dir has a .gcs-sha and no .git — so the gitCommitSha Claude Code recorded for them is not an upstream identity at all: resolving HEAD from inside the install dir walked up into ~/.claude and captured that repo's own HEAD. A pin that can only ever match the machine it was written on enforces nothing, so there is nothing to record.",
+  "$comment": "Claude marketplaces are checked out at exact commits before plugins are installed.",
+  "$required": "caveman and claude-hud are non-negotiable: caveman is the response-compression mode and claude-hud is the statusline. doctor.sh fails if either is absent. The third mandatory piece, rtk, is a host binary: see shared/manifests/deps.json.",
+  "$notPlugins": "firebase and playwright are deliberately absent. Both were installed as plugins, but only their tools are wanted, not their skills: see claude/mcp.json.",
   "marketplaces": {
-    "caveman": "JuliusBrussee/caveman",
-    "claude-hud": "jarrodwatts/claude-hud",
-    "ui-ux-pro-max-skill": "nextlevelbuilder/ui-ux-pro-max-skill",
-    "claude-plugins-official": "anthropics/claude-plugins-official"
+    "caveman": {"repo": "JuliusBrussee/caveman", "commit": "63e797cd753b301374947a5ed975c21775d962b9"},
+    "claude-hud": {"repo": "jarrodwatts/claude-hud", "commit": "b83b44593af24de1db6183788a51d08715501c02"},
+    "ui-ux-pro-max-skill": {"repo": "nextlevelbuilder/ui-ux-pro-max-skill", "commit": "b7e3af80f6e331f6fb456667b82b12cade7c9d35"},
+    "claude-plugins-official": {"repo": "anthropics/claude-plugins-official", "commit": "108f8f429d6e334578bf51d14776b6753a386214"}
   },
   "plugins": {
     "caveman@caveman": {

@@ -34,7 +34,7 @@ newest_hud() {
 plugin_dir="$(newest_hud "$CONFIG_DIR")"
 
 # Secondary profiles (~/.claude-glm) get their own plugin cache, which is empty
-# until Claude has fetched into it once. Read the native home's copy meanwhile —
+# until Claude has fetched into it once. Read the native home's copy meanwhile,
 # read-only, so the two caches never fight.
 [ -n "$plugin_dir" ] || plugin_dir="$(newest_hud "$HOME/.claude")"
 
@@ -51,7 +51,7 @@ for candidate in "$HOME/.bun/bin/bun" /opt/homebrew/bin/bun /usr/local/bin/bun; 
 done
 
 if [ -z "$bun_bin" ]; then
-  printf 'bun missing — claude-hud cannot render'
+  printf 'bun missing: claude-hud cannot render'
   exit 0
 fi
 

@@ -10,7 +10,7 @@ MCP_MANIFEST="$REPO_ROOT/claude/mcp.json"
 
 install_mcp_servers() {
   step "Registering MCP servers"
-  have claude || { warn "claude not on PATH — skipping MCP servers"; return 0; }
+  have claude || { warn "claude not on PATH: skipping MCP servers"; return 0; }
 
   local name scope state json
   while IFS=$'\t' read -r name scope state json; do

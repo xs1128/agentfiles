@@ -1,68 +1,11 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
-
-// missingDeps consults PATH, so point PATH at a directory holding only the
-// binaries a case wants to exist. Every other name then reads as missing.
-func pathWith(t *testing.T, bins ...string) {
-	t.Helper()
-	dir := t.TempDir()
-	for _, bin := range bins {
-		script := filepath.Join(dir, bin)
-		if err := os.WriteFile(script, []byte("#!/bin/sh\n"), 0o755); err != nil {
-			t.Fatalf("stub %s: %v", bin, err)
-		}
-	}
-	t.Setenv("PATH", dir)
-}
-
-func TestMissingDepsIsPerAgent(t *testing.T) {
-	cases := []struct {
-		name    string
-		present []string
-		agents  []string
-		want    string
-	}{{
-		name:    "codex alone does not ask for claude's toolchain",
-		present: []string{"git", "python3", "jq", "codex", "rtk"},
-		agents:  []string{"--codex"},
-		want:    "",
-	}, {
-		name:    "codex alone still reports its own tools",
-		present: []string{"git", "python3", "jq"},
-		agents:  []string{"--codex"},
-		want:    "codex,rtk",
-	}, {
-		name:    "claude needs bun, codex does not",
-		present: []string{"git", "python3", "jq", "claude", "codex", "rtk"},
-		agents:  []string{"--claude", "--codex"},
-		want:    "bun",
-	}, {
-		name:    "rtk is reported once when both agents want it",
-		present: []string{"git", "python3", "jq", "claude", "bun", "codex"},
-		agents:  []string{"--claude", "--codex"},
-		want:    "rtk",
-	}, {
-		name:    "required tools are reported with no agent selected",
-		present: []string{"python3", "jq"},
-		agents:  nil,
-		want:    "git",
-	}}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			pathWith(t, tc.present...)
-			if got := strings.Join(missingDeps(tc.agents), ","); got != tc.want {
-				t.Errorf("missingDeps(%v) = %q, want %q", tc.agents, got, tc.want)
-			}
-		})
-	}
-}
 
 // The agents step is the only multi-select, and the whole point of the marker
 // shapes is that it reads as one before the user presses space to find out.
@@ -88,6 +31,31 @@ func TestAgentsStepReadsAsMultiSelect(t *testing.T) {
 	}
 }
 
+// Space once toggled m.agents on every multi-select step: components were
+// untickable, and rows past agents' length panicked.
+func TestSpaceTogglesTheStepsOwnList(t *testing.T) {
+	m := newModel(".")
+	m.step = stepComponents
+	if !m.isMulti() || !strings.Contains(m.stepKind(), "multi") {
+		t.Fatal("components should be multi-select")
+	}
+
+	for i := range m.components {
+		m.cursor[int(stepComponents)] = i
+		was := m.components[i].on
+		next, _ := m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+		m = next.(model)
+		if m.components[i].on == was {
+			t.Errorf("space on component %q did not toggle it", m.components[i].label)
+		}
+	}
+	for i, a := range newModel(".").agents {
+		if m.agents[i].on != a.on {
+			t.Errorf("ticking components changed agent %q", a.label)
+		}
+	}
+}
+
 // The multi-select step has nothing to go back to, so offering "esc back"
 // there would point at a no-op.
 func TestKeyHintsMatchWhatTheStepAccepts(t *testing.T) {
@@ -108,7 +76,7 @@ func TestKeyHintsMatchWhatTheStepAccepts(t *testing.T) {
 }
 
 // pick turns a radio list into the named choice. The slice header is shared, so
-// this mutates the caller's list — same reason toggleSingle works.
+// this mutates the caller's list: same reason toggleSingle works.
 func pick(t *testing.T, list []choice, label string) {
 	t.Helper()
 	found := false
@@ -137,6 +105,18 @@ func wizard(t *testing.T, agents []string, profile, action string) model {
 	return m
 }
 
+func components(t *testing.T, m *model, labels ...string) {
+	t.Helper()
+	for i := range m.components {
+		m.components[i].on = false
+		for _, label := range labels {
+			if m.components[i].label == label {
+				m.components[i].on = true
+			}
+		}
+	}
+}
+
 // command() is the wizard's whole contract: it reproduces the CLI surface, and
 // the confirm line shows exactly what will run.
 func TestCommandReproducesTheCLISurface(t *testing.T) {
@@ -149,23 +129,23 @@ func TestCommandReproducesTheCLISurface(t *testing.T) {
 	}{{
 		name:   "doctor drops --profile, which it does not accept",
 		agents: []string{"--claude"}, profile: "glm", action: "doctor",
-		want: "./doctor.sh --claude",
+		want: "./doctor.sh --claude --config",
 	}, {
 		name:   "glm reaches install.sh when claude is ticked",
 		agents: []string{"--claude"}, profile: "glm", action: "install",
-		want: "./install.sh --claude --profile glm",
+		want: "./install.sh --claude --config --profile glm",
 	}, {
 		name:   "glm is dropped when claude is not ticked",
 		agents: []string{"--codex", "--pi"}, profile: "glm", action: "install",
-		want: "./install.sh --codex --pi",
+		want: "./install.sh --codex --pi --config",
 	}, {
 		name:   "--dry-run is appended last",
 		agents: []string{"--claude"}, profile: "glm", action: "dry run",
-		want: "./install.sh --claude --profile glm --dry-run",
+		want: "./install.sh --claude --config --profile glm --dry-run",
 	}, {
 		name:   "every ticked agent is passed in one run",
 		agents: []string{"--claude", "--codex", "--pi"}, profile: "native", action: "install",
-		want: "./install.sh --claude --codex --pi",
+		want: "./install.sh --claude --codex --pi --config",
 	}}
 
 	for _, tc := range cases {
@@ -180,17 +160,26 @@ func TestCommandReproducesTheCLISurface(t *testing.T) {
 	}
 }
 
+func TestComponentsAreExplicitOptIns(t *testing.T) {
+	m := wizard(t, []string{"--claude"}, "native", "install")
+	components(t, &m, "config", "skills", "mcp")
+	script, args := m.command()
+	if got := strings.TrimSpace(script + " " + strings.Join(args, " ")); got != "./install.sh --claude --config --skills --mcp" {
+		t.Errorf("command() = %q", got)
+	}
+}
+
 // Profiles are a Claude-only concept, so the step is skipped in both directions
-// when claude is unticked — otherwise the wizard offers a no-op screen.
+// when claude is unticked: otherwise the wizard offers a no-op screen.
 func TestProfileStepSkippedWithoutClaude(t *testing.T) {
 	for _, tc := range []struct {
 		claude     bool
 		from, want step
 	}{
-		{true, stepAgents, stepProfile},
-		{false, stepAgents, stepAction},
+		{true, stepComponents, stepProfile},
+		{false, stepComponents, stepAction},
 		{true, stepAction, stepProfile},
-		{false, stepAction, stepAgents},
+		{false, stepAction, stepComponents},
 	} {
 		agents := []string{"--codex"}
 		if tc.claude {
@@ -218,17 +207,7 @@ func TestClaudeSelectedSurvivesAgentReorder(t *testing.T) {
 		t.Fatal("claudeSelected() = false after reordering, want true")
 	}
 	_, args := m.command()
-	if got := strings.Join(args, " "); got != "--claude --profile glm" {
+	if got := strings.Join(args, " "); got != "--claude --config --profile glm" {
 		t.Errorf("command() args = %q, want the profile still applied", got)
-	}
-}
-
-// The wizard passes these exact strings to install.sh; a typo here would
-// silently skip an agent's dependency check.
-func TestAgentDepsKeysMatchWizardFlags(t *testing.T) {
-	for _, c := range newModel(".").agents {
-		if _, ok := agentDeps[c.key]; !ok {
-			t.Errorf("agent %q offers flag %q with no agentDeps entry", c.label, c.key)
-		}
 	}
 }

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Read-only: does this machine still match the repo? Exits non-zero if not.
 #
-#   ./doctor.sh            all agents
-#   ./doctor.sh --claude   one
+#   ./doctor.sh            every agent, every component
+#   ./doctor.sh --claude   one agent    (--all --claude --codex --pi)
+#   ./doctor.sh --skills   one component (--config --skills --plugins --mcp)
 
 set -uo pipefail
 
@@ -44,47 +45,51 @@ check_dead_links() {
   fi
 }
 
+check_codex_toml() {
+  [ -f "$CODEX_HOME/config.toml" ] || { bad "$CODEX_HOME/config.toml missing"; return; }
+  if python3 "$REPO_ROOT/lib/toml_merge.py" "$1" "$CODEX_HOME/config.toml" --dry-run \
+       | grep -q "already matches"; then
+    ok "$2"
+  else
+    bad "$2 drifted from managed keys: run ./install.sh --codex"
+  fi
+}
+
 # A name-set diff, not a count: a floor passed with one missing and one stray,
-# and an exact count needs a per-agent fudge — claude also holds workflow.md/.ts,
+# and an exact count needs a per-agent fudge: claude also holds workflow.md,
 # codex owns a .system dotdir.
 check_skill_set() {
   local dir label; dir="$(expand_tilde "$1")"; label="$2"; shift 2
   [ -d "$dir" ] || { bad "$label: $dir missing"; return; }
 
-  local expected actual missing extra
-  expected="$( { python3 - "$SKILLS_MANIFEST" "$WIKI_MANIFEST" "$REPO_ROOT" "$dir" <<'PY'
-import json, os, sys
-skills_m, wiki_m, repo, dest = sys.argv[1:5]
-names = set(json.load(open(skills_m))["skills"])
-wiki = json.load(open(wiki_m))
-if dest in [os.path.expanduser(p) for p in wiki["linkInto"]]:
-    names |= set(wiki["skills"])
-shared = os.path.join(repo, "shared", "skills")
-names |= {n for n in os.listdir(shared) if os.path.isdir(os.path.join(shared, n))}
-print("\n".join(names))
-PY
-    printf '%s\n' "$@"; } | grep -v '^$' | sort)"
+  local expected actual missing
+  expected="$(python3 "$REPO_ROOT/lib/expected_skills.py" \
+    "$SKILLS_MANIFEST" "$WIKI_MANIFEST" "$REPO_ROOT" "$dir" "$@" | sort)"
   actual="$(find "$dir" -maxdepth 1 -mindepth 1 ! -name '.*' -exec basename {} \; | sort)"
 
   missing="$(comm -23 <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") | tr '\n' ' ')"
-  extra="$(comm -13 <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") | tr '\n' ' ')"
-  if [ -n "$missing" ] || [ -n "$extra" ]; then
-    bad "$label:${missing:+ missing: $missing}${extra:+ extra: $extra}"
+  if [ -n "$missing" ]; then
+    bad "$label: missing: $missing"
   else
-    ok "$label: $(printf '%s\n' "$actual" | wc -l | tr -d ' ') skills, exactly as manifested"
+    ok "$label: all managed skills present"
   fi
 }
 
-DO_CLAUDE=0; DO_CODEX=0; DO_PI=0
+DO_CLAUDE=0; DO_CODEX=0; DO_PI=0; COMPONENTS=""
 if [ $# -eq 0 ]; then DO_CLAUDE=1; DO_CODEX=1; DO_PI=1; fi
 for arg in "$@"; do
   case "$arg" in
     --claude) DO_CLAUDE=1 ;; --codex) DO_CODEX=1 ;; --pi) DO_PI=1 ;;
     --all) DO_CLAUDE=1; DO_CODEX=1; DO_PI=1 ;;
-    -h|--help) sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --config|--skills|--plugins|--mcp) COMPONENTS="$COMPONENTS ${arg#--}" ;;
+    # install-only, accepted so the wizard can hand both scripts one flag set.
+    # It must not narrow the checks, or doctor reports healthy having run none.
+    --install-deps) ;;
+    -h|--help) sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown flag: $arg" ;;
   esac
 done
+[ -n "$COMPONENTS" ] || COMPONENTS=" config skills plugins mcp"
 
 printf '%s\n\n' "${C_BLD}agent-config doctor${C_OFF} ${C_DIM}$REPO_ROOT${C_OFF}"
 
@@ -97,20 +102,25 @@ if [ "$dirty" = 0 ]; then
 else
   warn "uncommitted changes in repo ($dirty file(s))"
   # settings.json is symlinked into ~/.claude, so an interactive /model writes
-  # through the link and back into the repo — worth naming, not just counting.
+  # through the link and back into the repo: worth naming, not just counting.
   if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- claude/settings.json 2>/dev/null)" ]; then
-    info "     claude/settings.json is one of them — /model and friends write back through the symlink; review that diff before committing"
+    info "     claude/settings.json is one of them: /model and friends write back through the symlink; review that diff before committing"
   fi
 fi
 
-step "Secrets"
-if [ -f "$SECRETS_FILE" ]; then
-  mode="$(stat -f '%Lp' "$SECRETS_FILE" 2>/dev/null || stat -c '%a' "$SECRETS_FILE")"
-  [ "$mode" = "600" ] && ok "$SECRETS_FILE (600)" || bad "$SECRETS_FILE is mode $mode, want 600"
-  ZAI_API_KEY="$(secret_value "$SECRETS_FILE" ZAI_API_KEY)"
-  [ -n "$ZAI_API_KEY" ] && ok "ZAI_API_KEY set" || warn "ZAI_API_KEY unset"
-else
-  warn "$SECRETS_FILE absent — run ./install.sh to scaffold it"
+if want config; then
+  step "Secrets"
+  if [ -f "$SECRETS_FILE" ]; then
+    mode="$(stat -f '%Lp' "$SECRETS_FILE" 2>/dev/null || stat -c '%a' "$SECRETS_FILE")"
+    [ "$mode" = "600" ] && ok "$SECRETS_FILE (600)" || bad "$SECRETS_FILE is mode $mode, want 600"
+    # Same rule as scaffold_secrets: a file that does not name the key leaves
+    # an env-supplied one standing.
+    from_file="$(secret_value "$SECRETS_FILE" ZAI_API_KEY)"
+    [ -z "$from_file" ] || ZAI_API_KEY="$from_file"
+    [ -n "${ZAI_API_KEY:-}" ] && ok "ZAI_API_KEY set" || warn "ZAI_API_KEY unset"
+  else
+    warn "$SECRETS_FILE absent: run ./install.sh to scaffold it"
+  fi
 fi
 
 # Value classes rather than a bare `KEY=`, so this file does not match itself.
@@ -142,61 +152,69 @@ scan_for_secrets "working tree" "$REPO_ROOT"
 
 # The repo only ever holds ${VAR} placeholders; the rendered configs and the
 # backup tree are where a real key would actually sit.
-step "No secrets in rendered configs or backups"
+step "No secrets in backups"
 SECRET_TARGETS=()
-[ -f "$PI_HOME/models.json" ]     && SECRET_TARGETS+=("$PI_HOME/models.json")
-[ -f "$GLM_HOME/settings.json" ]  && SECRET_TARGETS+=("$GLM_HOME/settings.json")
 [ -d "$HOME/.agent-config-backups" ] && SECRET_TARGETS+=("$HOME/.agent-config-backups")
 if [ ${#SECRET_TARGETS[@]} -gt 0 ]; then
-  scan_for_secrets "rendered/backups" "${SECRET_TARGETS[@]}"
+  scan_for_secrets "backups" "${SECRET_TARGETS[@]}"
 else
-  skip "nothing rendered or backed up yet"
+  skip "no backups"
+fi
+
+# The rendered files hold the key legitimately; with no key they are leftovers.
+if want config && [ -z "${ZAI_API_KEY:-}" ]; then
+  [ "$DO_PI" != 1 ] || [ ! -f "$PI_HOME/models.json" ] || bad "$PI_HOME/models.json contains a stale credential: run ./install.sh --pi"
+  [ "$DO_CLAUDE" != 1 ] || [ ! -f "$GLM_HOME/settings.json" ] || bad "$GLM_HOME/settings.json contains a stale credential: run ./install.sh --claude"
 fi
 
 # Empty here means dead links in all three agents.
-step "Shared skill tree"
-SKILL_ROOT="$(expand_tilde "$(jget "$SKILLS_MANIFEST" installRoot)")"
-if [ ! -d "$SKILL_ROOT" ]; then
-  bad "$SKILL_ROOT missing — run ./install.sh"
-else
-  n="$(find "$SKILL_ROOT" -maxdepth 1 -mindepth 1 ! -name '.*' | wc -l | tr -d ' ')"
-  [ "$n" -gt 0 ] && ok "$SKILL_ROOT: $n skills" || bad "$SKILL_ROOT is empty — run ./install.sh"
+if want skills; then
+  step "Shared skill tree"
+  SKILL_ROOT="$(expand_tilde "$(jget "$SKILLS_MANIFEST" installRoot)")"
+  if [ ! -d "$SKILL_ROOT" ]; then
+    bad "$SKILL_ROOT missing: run ./install.sh"
+  else
+    n="$(find "$SKILL_ROOT" -maxdepth 1 -mindepth 1 ! -name '.*' | wc -l | tr -d ' ')"
+    [ "$n" -gt 0 ] && ok "$SKILL_ROOT: $n skills" || bad "$SKILL_ROOT is empty: run ./install.sh"
+  fi
 fi
 
 if [ "$DO_CLAUDE" = 1 ]; then
   step "Claude Code"
-  for pair in "agents:agents" "workflows:workflows" "CLAUDE.md:CLAUDE.md" "RTK.md:RTK.md" \
-              "settings.json:settings.json" "statusline.sh:statusline.sh" \
-              "hud-statusline.sh:hud-statusline.sh"; do
-    check_link "$REPO_ROOT/claude/${pair%%:*}" "$CLAUDE_HOME/${pair##*:}"
-  done
-  for f in workflow.md workflow.ts; do
-    check_link "$REPO_ROOT/claude/skills/$f" "$CLAUDE_HOME/skills/$f"
-  done
-  check_dead_links "$CLAUDE_HOME/skills"
-  check_skill_set "$CLAUDE_HOME/skills" "claude skills" workflow.md workflow.ts
-  # The three mandatory pieces: rtk (host binary), caveman + claude-hud (plugins).
-  # `rtk gain`, not `have rtk`: reachingforthejack/rtk owns the same name and has
-  # no `gain` subcommand — see claude/RTK.md.
-  rtk gain >/dev/null 2>&1 || bad "rtk missing or not the token killer — the Bash PreToolUse hook in settings.json will fail on every call"
-  have bun || bad "bun missing — claude-hud statusline will not render"
-  have jq  || bad "jq missing — claude/statusline.sh degrades to a bare model name"
+  if want config; then
+    for pair in "agents:agents" "workflows:workflows" "CLAUDE.md:CLAUDE.md" "RTK.md:RTK.md" \
+                "settings.json:settings.json" "statusline.sh:statusline.sh" \
+                "hud-statusline.sh:hud-statusline.sh"; do
+      check_link "$REPO_ROOT/claude/${pair%%:*}" "$CLAUDE_HOME/${pair##*:}"
+    done
+    # `rtk gain`, not `have rtk`: reachingforthejack/rtk owns the same name and
+    # has no `gain` subcommand: see claude/RTK.md.
+    rtk gain >/dev/null 2>&1 || bad "rtk missing or not the token killer: the Bash PreToolUse hook in settings.json will fail on every call"
+    have jq  || bad "jq missing: claude/statusline.sh degrades to a bare model name"
+    have bun || bad "bun missing: claude-hud statusline will not render"
+  fi
+  if want skills; then
+    check_link "$REPO_ROOT/claude/skills/workflow.md" "$CLAUDE_HOME/skills/workflow.md"
+    check_dead_links "$CLAUDE_HOME/skills"
+    check_skill_set "$CLAUDE_HOME/skills" "claude skills" workflow.md
+  fi
 
   # MCP servers live in ~/.claude.json, which Claude rewrites; ask the CLI.
-  if have claude; then
+  if want mcp && have claude; then
     while IFS= read -r server; do
       [ -n "$server" ] || continue
       claude mcp get "$server" >/dev/null 2>&1 \
         && ok "mcp $server registered" \
-        || bad "mcp $server not registered — run ./install.sh --claude"
+        || bad "mcp $server not registered: run ./install.sh --claude"
     done < <(python3 -c 'import json,sys;print("\n".join(json.load(open(sys.argv[1]))["servers"]))' \
                "$REPO_ROOT/claude/mcp.json")
   fi
 
-  while IFS=$'\t' read -r status key note; do
-    [ -n "$key" ] || continue
-    [ "$status" = ok ] && ok "plugin $key ($note)" || bad "plugin $key: $note"
-  done < <(python3 - "$REPO_ROOT/claude/plugins.json" "$CLAUDE_HOME/plugins/installed_plugins.json" <<'PY'
+  if want plugins; then
+    while IFS=$'\t' read -r status key note; do
+      [ -n "$key" ] || continue
+      [ "$status" = ok ] && ok "plugin $key ($note)" || bad "plugin $key: $note"
+    done < <(python3 - "$REPO_ROOT/claude/plugins.json" "$CLAUDE_HOME/plugins/installed_plugins.json" <<'PY'
 import json, os, sys
 manifest = json.load(open(sys.argv[1]))
 installed = {}
@@ -213,63 +231,61 @@ for key, spec in manifest["plugins"].items():
     elif have:
         # bad here, warn in lib/plugins.sh, on purpose: doctor only reports, so it
         # can fail on drift install.sh must not fail on. The fix is bumping the
-        # pin by hand — `claude plugin install` only ever fetches latest.
-        print("\t".join(["bad", key, f"version {have}, plugins.json pins {want} — bump the pin in claude/plugins.json"]))
+        # pin by hand: `claude plugin install` only ever fetches latest.
+        print("\t".join(["bad", key, f"version {have}, plugins.json pins {want}: bump the pin in claude/plugins.json"]))
     else:
-        print("\t".join(["bad", key, "not installed — " + spec.get("why", "required")]))
+        print("\t".join(["bad", key, "not installed: " + spec.get("why", "required")]))
 PY
 )
+  fi
 fi
 
 if [ "$DO_CODEX" = 1 ]; then
   step "Codex"
-  check_link "$REPO_ROOT/codex/AGENTS.md" "$CODEX_HOME/AGENTS.md"
-  check_dead_links "$CODEX_HOME/skills"
-  check_skill_set "$CODEX_HOME/skills" "codex skills"
-
-  # AGENTS.md is the only thing telling Codex to use rtk — it gets no hook.
-  rtk gain >/dev/null 2>&1 || bad "rtk missing or not the token killer — codex/AGENTS.md tells the model to prefix every shell command with it"
-
-  # Codex ignores `@file` imports (it inlines AGENTS.md verbatim), so the rules
-  # only work if they are in the file itself. Ask Codex what it actually sees.
-  if have codex; then
-    if codex debug prompt-input 2>/dev/null | grep -q 'rtk gain'; then
-      ok "rtk instructions reach the model prompt"
-    else
-      bad "codex/AGENTS.md is not reaching the model prompt — run ./install.sh --codex"
+  if want config; then
+    check_link "$REPO_ROOT/codex/AGENTS.md" "$CODEX_HOME/AGENTS.md"
+    # AGENTS.md is the only thing telling Codex to use rtk: it gets no hook.
+    rtk gain >/dev/null 2>&1 || bad "rtk missing or not the token killer: codex/AGENTS.md tells the model to prefix every shell command with it"
+    # Codex ignores `@file` imports, so ask it what it actually sees.
+    if have codex; then
+      codex debug prompt-input 2>/dev/null | grep -q 'rtk gain' \
+        && ok "rtk instructions reach the model prompt" \
+        || bad "codex/AGENTS.md is not reaching the model prompt: run ./install.sh --codex"
     fi
+    check_codex_toml "$REPO_ROOT/codex/config.toml.tmpl" "Codex config"
   fi
-
-  if [ -f "$CODEX_HOME/config.toml" ]; then
-    if python3 "$REPO_ROOT/lib/toml_merge.py" "$REPO_ROOT/codex/config.toml.tmpl" \
-         "$CODEX_HOME/config.toml" --dry-run | grep -q "already matches"; then
-      ok "config.toml carries all managed keys"
-    else
-      bad "config.toml has drifted from managed keys — run ./install.sh --codex"
-    fi
-  else
-    bad "$CODEX_HOME/config.toml missing"
+  if want skills; then
+    check_dead_links "$CODEX_HOME/skills"
+    check_skill_set "$CODEX_HOME/skills" "codex skills"
   fi
+  want mcp     && check_codex_toml "$REPO_ROOT/codex/mcp.toml.tmpl" "Codex MCP"
+  want plugins && check_codex_toml "$REPO_ROOT/codex/plugins.toml.tmpl" "Codex plugins"
 fi
 
 if [ "$DO_PI" = 1 ]; then
   step "pi"
-  check_link "$REPO_ROOT/pi/settings.json" "$PI_HOME/settings.json"
-  if [ -f "$PI_HOME/models.json" ]; then
-    mode="$(stat -f '%Lp' "$PI_HOME/models.json" 2>/dev/null || stat -c '%a' "$PI_HOME/models.json")"
-    [ "$mode" = "600" ] && ok "models.json (600)" || bad "models.json is mode $mode, want 600 — it holds your z.ai key"
-    [ -L "$PI_HOME/models.json" ] && bad "models.json is a symlink into the repo — it holds a secret and must be a rendered local file"
-  else
-    bad "$PI_HOME/models.json missing — run ./install.sh --pi"
+  if want config; then
+    check_link "$REPO_ROOT/pi/settings.json" "$PI_HOME/settings.json"
+    if [ -z "${ZAI_API_KEY:-}" ]; then
+      ok "models.json absent (ZAI_API_KEY unset)"
+    elif [ -f "$PI_HOME/models.json" ]; then
+      mode="$(stat -f '%Lp' "$PI_HOME/models.json" 2>/dev/null || stat -c '%a' "$PI_HOME/models.json")"
+      [ "$mode" = "600" ] && ok "models.json (600)" || bad "models.json is mode $mode, want 600: it holds your z.ai key"
+      [ -L "$PI_HOME/models.json" ] && bad "models.json is a symlink into the repo: it holds a secret and must be a rendered local file"
+    else
+      bad "$PI_HOME/models.json missing: run ./install.sh --pi"
+    fi
   fi
-  check_dead_links "$PI_HOME/skills"
-  check_skill_set "$PI_HOME/skills" "pi skills"
+  if want skills; then
+    check_dead_links "$PI_HOME/skills"
+    check_skill_set "$PI_HOME/skills" "pi skills"
+  fi
 fi
 
 echo
 if [ "$PROBLEMS" -eq 0 ]; then
-  printf '%s\n' "${C_GRN}healthy${C_OFF} — machine matches repo"
+  printf '%s\n' "${C_GRN}healthy${C_OFF}: machine matches repo"
 else
-  printf '%s\n' "${C_RED}$PROBLEMS problem(s)${C_OFF} — most are fixed by ./install.sh --all"
+  printf '%s\n' "${C_RED}$PROBLEMS problem(s)${C_OFF}, most are fixed by ./install.sh --all"
   exit 1
 fi

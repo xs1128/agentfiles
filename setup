@@ -30,8 +30,13 @@ for arg in "$@"; do
 done
 
 if ! command -v go >/dev/null 2>&1; then
-  [ "$BOOTSTRAP" = 1 ] && install_tui_dependencies
-  command -v go >/dev/null 2>&1 || { printf 'Go is required to build the TUI.\n' >&2; exit 1; }
+  # `|| true`: a declined install is a choice, not an error to errexit on.
+  [ "$BOOTSTRAP" = 1 ] && { install_tui_dependencies || true; }
+  command -v go >/dev/null 2>&1 || {
+    printf 'Go is required to build the wizard. The scripts work without it:\n\n' >&2
+    sed -n '11,13p' "$0" | sed 's/^# \{0,1\}//' >&2
+    exit 1
+  }
 fi
 
 # Rebuild when the binary is missing or any source is newer than it.

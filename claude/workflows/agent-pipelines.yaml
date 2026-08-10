@@ -2,7 +2,7 @@
 # Multi-agent orchestration for common development tasks
 
 plan-build-review:
-  description: "Plan, implement, and review — the standard development cycle"
+  description: "Plan, implement, and review: the standard development cycle"
   steps:
     - agent: planner
       prompt: "Plan the implementation for: $INPUT"
@@ -12,7 +12,7 @@ plan-build-review:
       prompt: "Review this implementation for bugs, style, and correctness:\n\n$INPUT"
 
 plan-build:
-  description: "Plan then build — fast two-step implementation without review"
+  description: "Plan then build: fast two-step implementation without review"
   steps:
     - agent: planner
       prompt: "Plan the implementation for: $INPUT"
@@ -20,17 +20,21 @@ plan-build:
       prompt: "Based on this plan, implement:\n\n$INPUT"
 
 scout-flow:
-  description: "Triple-scout deep recon — explore, validate, verify"
+  description: "Multi-angle recon: three scouts in parallel, one merged report"
+  parallel: true
   steps:
     - agent: scout
-      prompt: "Explore the codebase and investigate: $INPUT\n\nReport your findings with structure, key files, and patterns."
+      prompt: "Map the structure for: $ORIGINAL\n\nReport which files own this area, how they are wired together, and the naming conventions in use. Give paths and line refs."
     - agent: scout
-      prompt: "Validate and cross-check the following analysis. Look for anything missed, incorrect, or incomplete:\n\n$INPUT\n\nOriginal request: $ORIGINAL"
+      prompt: "Trace dependencies for: $ORIGINAL\n\nReport what calls into this area, what it calls out to, and what breaks if it changes. Give paths and line refs."
     - agent: scout
-      prompt: "Final review pass. Verify the analysis below is accurate and complete. Add any missing details or corrections:\n\n$INPUT\n\nOriginal request: $ORIGINAL"
+      prompt: "Find the edge cases in: $ORIGINAL\n\nReport error paths, special cases, dead code, stale comments, and anything surprising. Give paths and line refs."
+  merge:
+    agent: scout
+    prompt: "Merge these three recon reports into one. Deduplicate overlapping findings, keep every path and line ref, and flag any point where the reports contradict each other.\n\nOriginal request: $ORIGINAL\n\nStructure:\n$STEP_1\n\nDependencies:\n$STEP_2\n\nEdge cases:\n$STEP_3"
 
 plan-review-plan:
-  description: "Iterative planning — plan, critique, then refine with feedback"
+  description: "Iterative planning: plan, critique, then refine with feedback"
   steps:
     - agent: planner
       prompt: "Create a detailed implementation plan for: $INPUT"
@@ -40,7 +44,7 @@ plan-review-plan:
       prompt: "Revise and improve your implementation plan based on this critique. Address every issue raised and incorporate the recommendations:\n\nOriginal request: $ORIGINAL\n\nCritique:\n$INPUT"
 
 full-review:
-  description: "End-to-end pipeline — scout, plan, build, and review"
+  description: "End-to-end pipeline: scout, plan, build, and review"
   steps:
     - agent: scout
       prompt: "Explore the codebase and identify: $INPUT"
@@ -62,14 +66,13 @@ build-review-loop:
       loop_condition: "until approved"
 
 weekly-sweep:
-  description: "Cross-domain status sweep — repos, school deadlines, research cadence"
+  description: "Cross-domain status sweep: repos, school deadlines, research cadence"
+  parallel: true
   steps:
     - agent: scout
-      model: sonnet
       prompt: "Scan ~/Desktop/code/* for git status, stale branches (>2wk no commit), uncommitted work. Report per-repo one-liners."
     - agent: scout
-      model: sonnet
       prompt: "Read ~/.claude/projects/-Users-xsooi1128-Desktop-xs/memory/11510-semester-plan.md and wiki/11510-hub.md. List upcoming deadlines and unresolved decisions."
-    - agent: orchestrator
-      model: opus
-      prompt: "Consolidate the above into one digest. Append to ~/Desktop/xs/wiki/log.md with today's date, following the existing log.md entry format. Update wiki/hot.md summary line."
+  merge:
+    agent: orchestrator
+    prompt: "Consolidate these into one digest. Append to ~/Desktop/xs/wiki/log.md with today's date, following the existing log.md entry format. Update wiki/hot.md summary line.\n\nRepos:\n$STEP_1\n\nSchool:\n$STEP_2"

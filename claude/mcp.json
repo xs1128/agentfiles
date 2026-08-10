@@ -1,5 +1,5 @@
 {
-  "$comment": "MCP servers registered at user scope by install.sh via `claude mcp add-json`. Kept separate from plugins.json because MCP definitions live in ~/.claude.json, not settings.json — that file is Claude's own mutable state, so it is written through the CLI rather than symlinked.",
+  "$comment": "MCP servers registered at user scope by install.sh via `claude mcp add-json`. Kept separate from plugins.json because MCP definitions live in ~/.claude.json, not settings.json: that file is Claude's own mutable state, so it is written through the CLI rather than symlinked.",
   "$why": "firebase and playwright are wanted for their tools only, not their skills. Firebase's plugin bundles ~10 Genkit/Firestore skills alongside the MCP server; the playwright plugin ships a skill and no MCP server at all. Registering the servers directly gives the tools without the skill bloat.",
   "servers": {
     "firebase": {
@@ -28,7 +28,7 @@
           "@playwright/mcp@0.0.78"
         ]
       },
-      "why": "browser automation as tool calls. Note the playwright-skill plugin never provided this — it only wrote Playwright scripts to /tmp"
+      "why": "browser automation as tool calls. Note the playwright-skill plugin never provided this: it only wrote Playwright scripts to /tmp"
     }
   }
 }

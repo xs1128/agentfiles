@@ -28,16 +28,17 @@ Steps:
 2. Builder implements the plan
 
 ### `scout-flow`
-**Deep exploration** - Triple-scout investigation
+**Deep exploration** - Multi-angle scout recon, run in parallel
 
 ```
 /workflow scout-flow "How does authentication work?"
 ```
 
-Steps:
-1. Scout explores codebase
-2. Scout validates findings
-3. Scout verifies completeness
+Steps (1-3 dispatch concurrently):
+1. Scout maps structure and ownership
+2. Scout traces dependencies and call sites
+3. Scout finds edge cases and gotchas
+4. Scout merges the three reports, deduplicating and flagging contradictions
 
 ### `plan-review-plan`
 **Iterative planning** - Plan, critique, refine
@@ -99,6 +100,29 @@ my-workflow:
       prompt: "Review:\n\n$INPUT"
       loop: true
       loop_condition: "until approved"
+```
+
+## Parallel Behavior
+
+When `parallel: true`, the workflow's steps have no dependency on one another and
+are dispatched concurrently in a single message rather than one per turn. Parallel
+steps read `$ORIGINAL` (there is no previous step, so `$INPUT` is unavailable).
+
+An optional `merge` block then runs once every parallel step has returned, reading
+their outputs as `$STEP_1`, `$STEP_2`, and so on in step order:
+
+```yaml
+my-parallel-workflow:
+  description: "What it does"
+  parallel: true
+  steps:
+    - agent: scout
+      prompt: "First angle on: $ORIGINAL"
+    - agent: scout
+      prompt: "Second angle on: $ORIGINAL"
+  merge:
+    agent: scout
+    prompt: "Reconcile:\n\n$STEP_1\n\n$STEP_2"
 ```
 
 ## Loop Behavior

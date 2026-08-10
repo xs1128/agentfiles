@@ -13,6 +13,7 @@ type step int
 
 const (
 	stepAgents step = iota
+	stepComponents
 	stepProfile
 	stepAction
 	stepRun
@@ -47,11 +48,12 @@ type model struct {
 	repo string
 	step step
 
-	agents  []choice
-	profile []choice
-	action  []choice
+	agents     []choice
+	components []choice
+	profile    []choice
+	action     []choice
 
-	cursor [3]int // one per selection step
+	cursor [4]int // one per selection step
 	warn   string
 
 	vp       viewport.Model
@@ -72,9 +74,16 @@ func newModel(repo string) model {
 			{key: "--codex", label: "codex", hint: "AGENTS.md, skills, merged config.toml (model, MCP, plugins)"},
 			{key: "--pi", label: "pi", hint: "settings.json + rendered models.json (needs ZAI_API_KEY)"},
 		},
+		components: []choice{
+			{key: "--install-deps", label: "dependencies", hint: "install missing tools for this OS"},
+			{key: "--config", label: "config", hint: "agent settings and rendered models", on: true},
+			{key: "--skills", label: "skills", hint: "pinned and local skills"},
+			{key: "--plugins", label: "plugins", hint: "Claude/Codex plugins"},
+			{key: "--mcp", label: "mcp", hint: "MCP servers"},
+		},
 		profile: []choice{
-			{label: "native", hint: "~/.claude — Anthropic, Opus", on: true},
-			{label: "glm", hint: "~/.claude-glm too — z.ai GLM, shares agents and skills"},
+			{label: "native", hint: "~/.claude, Anthropic, Opus", on: true},
+			{label: "glm", hint: "~/.claude-glm too, z.ai GLM, shares agents and skills"},
 		},
 		action: []choice{
 			{label: "dry run", hint: "print every action, change nothing", on: true},
@@ -98,6 +107,16 @@ func (m model) agentFlags() []string {
 }
 
 func (m model) anyAgent() bool { return len(m.agentFlags()) > 0 }
+
+func (m model) componentFlags() []string {
+	var out []string
+	for _, c := range m.components {
+		if c.on {
+			out = append(out, c.key)
+		}
+	}
+	return out
+}
 
 // By key, not position: reordering the agents slice would otherwise silently
 // gate the profile step on the wrong agent.
@@ -129,9 +148,9 @@ func (m model) actionLabel() string {
 }
 
 // command turns the collected answers into the exact script invocation, which
-// is also what the confirm line shows — no hidden behaviour.
+// is also what the confirm line shows: no hidden behaviour.
 func (m model) command() (string, []string) {
-	args := m.agentFlags()
+	args := append(m.agentFlags(), m.componentFlags()...)
 	if m.actionLabel() == "doctor" {
 		return "./doctor.sh", args
 	}
@@ -201,6 +220,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c":
+		if m.run != nil {
+			m.run.stop()
+		}
 		return m, tea.Quit
 	case "q":
 		// While a script is running, q would strand a half-finished install;
@@ -230,8 +252,9 @@ func (m model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor[idx]++
 		}
 	case " ":
-		if m.step == stepAgents {
-			m.agents[m.cursor[idx]].on = !m.agents[m.cursor[idx]].on
+		if m.isMulti() {
+			// list, not m.agents: the same key serves agents and components.
+			list[m.cursor[idx]].on = !list[m.cursor[idx]].on
 		} else {
 			toggleSingle(list, m.cursor[idx])
 		}
@@ -239,11 +262,15 @@ func (m model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "left", "h":
 		m.step = m.prev()
 	case "enter", "right", "l":
-		if m.step != stepAgents {
+		if !m.isMulti() {
 			toggleSingle(list, m.cursor[idx])
 		}
 		if m.step == stepAgents && !m.anyAgent() {
 			m.warn = "pick at least one agent (space to tick)"
+			return m, nil
+		}
+		if m.step == stepComponents && len(m.componentFlags()) == 0 {
+			m.warn = "pick at least one component"
 			return m, nil
 		}
 		m.warn = ""
@@ -264,6 +291,8 @@ func (m model) list(s step) []choice {
 	switch s {
 	case stepAgents:
 		return m.agents
+	case stepComponents:
+		return m.components
 	case stepProfile:
 		return m.profile
 	default:
@@ -271,11 +300,13 @@ func (m model) list(s step) []choice {
 	}
 }
 
-// next/prev skip the profile step when claude is not selected — profiles are a
+// next/prev skip the profile step when claude is not selected: profiles are a
 // Claude-only concept.
 func (m model) next() step {
 	switch m.step {
 	case stepAgents:
+		return stepComponents
+	case stepComponents:
 		if m.claudeSelected() {
 			return stepProfile
 		}
@@ -293,8 +324,10 @@ func (m model) prev() step {
 		if m.claudeSelected() {
 			return stepProfile
 		}
-		return stepAgents
+		return stepComponents
 	case stepProfile:
+		return stepComponents
+	case stepComponents:
 		return stepAgents
 	default:
 		return stepAgents
@@ -316,17 +349,11 @@ func (m model) viewWizard() string {
 
 	b.WriteString(sTitle.Render("agent-config") + "  " + sDim.Render(m.repo) + "\n\n")
 
-	// Recomputed every frame so ticking an agent on or off updates the warning
-	// to that agent's tools rather than a fixed claude-shaped list.
-	if deps := missingDeps(m.agentFlags()); len(deps) > 0 {
-		b.WriteString(sWarn.Render("missing on PATH: "+strings.Join(deps, ", ")) + "\n")
-		b.WriteString(sDim.Render("the script will tell you how to install each one") + "\n\n")
-	}
-
 	prompt := map[step]string{
-		stepAgents:  "Which agents?",
-		stepProfile: "Which Claude profile?",
-		stepAction:  "What should I run?",
+		stepAgents:     "Which agents?",
+		stepComponents: "What should be managed?",
+		stepProfile:    "Which Claude profile?",
+		stepAction:     "What should I run?",
 	}[m.step]
 	b.WriteString(sTitle.Render(prompt) + "  " + sDim.Render(m.stepKind()) + "\n")
 	b.WriteString(sDim.Render(m.stepHelp()) + "\n\n")
@@ -354,7 +381,7 @@ func (m model) viewWizard() string {
 
 // Only the agents step accepts more than one answer. Everything below exists so
 // that is obvious before the user presses space to find out.
-func (m model) isMulti() bool { return m.step == stepAgents }
+func (m model) isMulti() bool { return m.step == stepAgents || m.step == stepComponents }
 
 func (m model) stepKind() string {
 	if m.isMulti() {
@@ -365,12 +392,12 @@ func (m model) stepKind() string {
 
 func (m model) stepHelp() string {
 	if m.isMulti() {
-		return "space to tick — tick as many as you want, they install in one run"
+		return "space to tick: tick as many as you want, they install in one run"
 	}
 	return "space or enter to choose"
 }
 
-// Square boxes tick, round ones are exclusive — the same convention as a web
+// Square boxes tick, round ones are exclusive: the same convention as a web
 // form's checkboxes vs radios, so the shape alone answers "can I pick two?".
 func (m model) mark(on bool) string {
 	switch {
@@ -401,9 +428,7 @@ func (m model) viewRun() string {
 	case m.runErr != nil:
 		foot = sErr.Render("could not run: " + m.runErr.Error())
 	case !m.finished:
-		// ctrl+c is a bare tea.Quit — the script is never signalled, so it keeps
-		// running to completion in the background. Say so rather than promise abort.
-		foot = sDim.Render("↑/↓ scroll · ctrl+c quit (script keeps running)")
+		foot = sDim.Render("↑/↓ scroll · ctrl+c stop")
 	case m.exitCode == 0:
 		foot = sOn.Render("done") + sDim.Render("  ·  q to quit")
 	default:

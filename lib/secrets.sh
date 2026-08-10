@@ -48,7 +48,7 @@ scaffold_secrets() {
         done
       } > "$SECRETS_FILE"
       chmod 600 "$SECRETS_FILE"
-      ok "created $SECRETS_FILE (chmod 600) — fill it in and re-run"
+      ok "created $SECRETS_FILE (chmod 600): fill it in and re-run"
     fi
   fi
 
@@ -59,19 +59,20 @@ scaffold_secrets() {
       warn "$SECRETS_FILE is mode $mode; tightening to 600"
       run chmod 600 "$SECRETS_FILE"
     fi
+    # Only when the file names it: an env-supplied key must survive, or the
+    # install reads it as revoked and deletes the rendered credential.
     local entry var value
     for entry in "${SECRET_VARS[@]}"; do
       var="${entry%%:*}"
       value="$(secret_value "$SECRETS_FILE" "$var")"
-      printf -v "$var" '%s' "$value"
-      export "$var"
+      [ -z "$value" ] || export "$var=$value"
     done
   fi
 
   local entry var unset_count=0
   for entry in "${SECRET_VARS[@]}"; do
     var="${entry%%:*}"
-    if [ -n "${!var:-}" ]; then ok "$var set"; else warn "$var unset — templates needing it will be skipped"; unset_count=$((unset_count+1)); fi
+    if [ -n "${!var:-}" ]; then ok "$var set"; else warn "$var unset: templates needing it will be skipped"; unset_count=$((unset_count+1)); fi
   done
   return 0
 }

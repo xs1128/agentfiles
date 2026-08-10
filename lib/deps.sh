@@ -6,11 +6,11 @@ DEPS_MANIFEST="$REPO_ROOT/shared/manifests/deps.json"
 DEPS_MISSING=0
 
 # deps.json's "check" runs where bare PATH presence cannot tell two binaries of
-# the same name apart — see rtk. Trusted input: the manifest is a repo file.
+# the same name apart: see rtk. Trusted input: the manifest is a repo file.
 _dep_present() {
   local name="$1" check="$2"
-  # Not under --dry-run: these are real subprocesses that write state — `rtk gain`
-  # creates history.db, `go version` a telemetry dir — and a dry run changes nothing.
+  # Not under --dry-run: these are real subprocesses that write state: `rtk gain`
+  # creates history.db, `go version` a telemetry dir: and a dry run changes nothing.
   if [ -n "$check" ] && [ "$DRY_RUN" != "1" ]; then
     eval "$check" >/dev/null 2>&1
   else
@@ -22,9 +22,12 @@ _dep_check() {
   local name="$1" install_hint="$2" why="$3" check="${4:-}"
   if _dep_present "$name" "$check"; then
     ok "$name"
+  elif want deps; then
+    platform_install_tool "$name" || warn "automatic install failed for $name"
+    _dep_present "$name" "$check" && ok "$name" || { DEPS_MISSING=$((DEPS_MISSING + 1)); fail "$name still missing"; }
   else
     DEPS_MISSING=$((DEPS_MISSING + 1))
-    fail "$name missing${why:+ — $why}"
+    fail "$name missing${why:+: $why}"
     info "     install: $install_hint"
   fi
 }
@@ -60,11 +63,11 @@ check_deps() {
 
   while IFS=$'\t' read -r name hint why check; do
     if [ -n "$name" ]; then
-      _dep_present "$name" "$check" && ok "$name (optional)" || warn "$name missing (optional)${why:+ — $why}"
+      _dep_present "$name" "$check" && ok "$name (optional)" || warn "$name missing (optional)${why:+: $why}"
     fi
   done < <(_dep_rows optional)
 
   if [ "$DEPS_MISSING" -gt 0 ]; then
-    die "$DEPS_MISSING required dependency(s) missing — install them, then re-run"
+    die "$DEPS_MISSING required dependency(s) missing: install them, then re-run"
   fi
 }

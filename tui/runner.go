@@ -29,6 +29,7 @@ type runner struct {
 func newRunner(dir, script string, args []string) *runner {
 	cmd := exec.Command("bash", append([]string{script}, args...)...)
 	cmd.Dir = dir
+	setPgid(cmd)
 	// The scripts colour their own output unconditionally, but they may consult
 	// TERM; give them one that supports the 256-colour codes they emit.
 	cmd.Env = append(cmd.Environ(), "TERM=xterm-256color")
@@ -91,5 +92,13 @@ func (r *runner) next() tea.Cmd {
 			return lineMsg(line)
 		}
 		return <-r.done
+	}
+}
+
+// stop signals the whole group: the script spawns git/npm children that a bare
+// Kill on bash would leave running.
+func (r *runner) stop() {
+	if r.cmd.Process != nil {
+		killGroup(r.cmd.Process.Pid)
 	}
 }

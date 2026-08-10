@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# FALLBACK ONLY — not wired by default. settings.json points statusLine at
+# FALLBACK ONLY: not wired by default. settings.json points statusLine at
 # hud-statusline.sh (the claude-hud plugin). This is the pure-bash/jq version,
 # kept for machines where bun or the plugin is unavailable; to use it, swap the
 # statusLine command in claude/settings.json to
 #   bash "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/statusline.sh"
 #
 # Native Claude statusline: caveman badge + official subscription usage.
-# Uses the v2.1.x statusline JSON (.rate_limits / .context_window) — the same
+# Uses the v2.1.x statusline JSON (.rate_limits / .context_window): the same
 # numbers the app's /usage shows. rate_limits is only present on a SUBSCRIPTION
 # login (not API billing) and only after the first API response of the session.
 input=$(cat)
@@ -44,7 +44,7 @@ if [ -n "$rl5" ]; then
   [ -n "$rl5r" ] && seg="$seg$(printf ' \033[38;5;240m⟳%s\033[0m' "$(rem "$rl5r")")"
   out="$out $(printf '%b' "$C") $seg"
 else
-  out="$out $(printf '%b' "$C") $(printf '\033[38;5;240m5h —\033[0m')"
+  out="$out $(printf '%b' "$C") $(printf '\033[38;5;240m5h ·\033[0m')"
 fi
 
 # --- 7-day limit (if present) ---

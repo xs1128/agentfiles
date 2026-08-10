@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import sys
+import tempfile
 import tomllib
 from pathlib import Path
 
@@ -70,6 +72,16 @@ def fmt_val(val) -> str:
 
 def is_table_array(val) -> bool:
     return isinstance(val, list) and bool(val) and all(isinstance(v, dict) for v in val)
+
+
+def atomic_write(path: Path, body: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    mode = path.stat().st_mode & 0o777 if path.exists() else 0o600
+    with tempfile.NamedTemporaryFile("w", dir=path.parent, delete=False) as f:
+        tmp = Path(f.name)
+        f.write(body)
+    os.chmod(tmp, mode)
+    os.replace(tmp, path)
 
 
 def dump(data: dict, prefix: tuple[str, ...] = (), header: bool = True) -> list[str]:
@@ -143,8 +155,7 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    target_path.write_text(body)
+    atomic_write(target_path, body)
     print("merged managed keys into %s (%s)" % (target_path, ", ".join(changed)))
     return 0
 

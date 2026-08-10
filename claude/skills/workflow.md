@@ -36,6 +36,17 @@ When user invokes `/workflow`:
 6. If `loop: true`, repeat builder → reviewer until approved
 7. Return final output
 
+### Parallel workflows
+
+If the workflow sets `parallel: true`, its `steps` have no dependency on each
+other and must be dispatched **concurrently**: every Task call in a single
+message, not one per turn. Parallel steps cannot reference `$INPUT` (there is no
+previous step); they take `$ORIGINAL` instead.
+
+A `parallel` workflow may then define a single `merge` step, which runs after all
+parallel steps return and reads their outputs as `$STEP_1`, `$STEP_2`, … in step
+order. Its output is the workflow's output.
+
 ## Variable Substitution
 
 - `$INPUT` - Output from previous step

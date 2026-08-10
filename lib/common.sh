@@ -9,19 +9,22 @@ FAILURES=0   # non-fatal problems; the run finishes, then exits non-zero
 C_DIM=$'\033[38;5;240m'; C_RED=$'\033[38;5;203m'; C_YEL=$'\033[38;5;220m'
 C_GRN=$'\033[38;5;71m'; C_BLD=$'\033[1m'; C_OFF=$'\033[0m'
 
-info()  { printf '%s\n' "  $*"; }
+info()  { [ "${QUIET:-0}" = 1 ] || printf '%s\n' "  $*"; }
 step()  { printf '%s\n' "${C_BLD}==>${C_OFF} $*"; }
-ok()    { printf '%s\n' "  ${C_GRN}ok${C_OFF}    $*"; }
+ok()    { [ "${QUIET:-0}" = 1 ] || printf '%s\n' "  ${C_GRN}ok${C_OFF}    $*"; }
 warn()  { printf '%s\n' "  ${C_YEL}warn${C_OFF}  $*" >&2; }
 fail()  { printf '%s\n' "  ${C_RED}fail${C_OFF}  $*" >&2; }
 die()   { fail "$*"; exit 1; }
-skip()  { printf '%s\n' "  ${C_DIM}skip${C_OFF}  $*"; }
-plan()  { printf '%s\n' "  ${C_DIM}would${C_OFF} $*"; }
+skip()  { [ "${QUIET:-0}" = 1 ] || printf '%s\n' "  ${C_DIM}skip${C_OFF}  $*"; }
+plan()  { [ "${QUIET:-0}" = 1 ] || printf '%s\n' "  ${C_DIM}would${C_OFF} $*"; }
 
 run() {
   if [ "$DRY_RUN" = "1" ]; then plan "$*"; return 0; fi
   "$@"
 }
+
+# Component gate. install.sh and doctor.sh both fill COMPONENTS from their flags.
+want() { case " ${COMPONENTS:-} " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 expand_tilde() { printf '%s' "${1/#\~/$HOME}"; }
 
@@ -35,13 +38,14 @@ backup_rel() {
 }
 
 # Pass the incoming replacement as $2 and a byte-identical target is dropped, not
-# archived — that is what stops the tree growing on every idempotent re-run.
+# archived: that is what stops the tree growing on every idempotent re-run.
 backup_path() {
   local target="$1" incoming="${2:-}"
   [ -e "$target" ] || [ -L "$target" ] || return 0
-  local dest="$BACKUP_DIR/$(backup_rel "$target")"
+  local dest
+  dest="$BACKUP_DIR/$(backup_rel "$target")"
   if [ "$DRY_RUN" = "1" ]; then plan "back up $target -> $dest"; return 0; fi
-  if [ -n "$incoming" ] && cmp -s "$target" "$incoming"; then
+  if [ -n "$incoming" ] && cmp -s "$target" "$incoming" 2>/dev/null; then
     rm -rf "$target"
     return 0
   fi
@@ -97,7 +101,7 @@ render_template() {
   done < <(grep -oE '\$\{[A-Z_][A-Z0-9_]*\}' "$tmpl" | tr -d '${}' | sort -u)
 
   if [ ${#missing[@]} -gt 0 ]; then
-    warn "$(basename "$tmpl"): unset ${missing[*]} — see $SECRETS_FILE"
+    warn "$(basename "$tmpl"): unset ${missing[*]}: see $SECRETS_FILE"
     if [ "$kind" = secret ] && { [ -e "$dst" ] || [ -L "$dst" ]; }; then
       if [ "$DRY_RUN" = 1 ]; then plan "remove stale secret config $dst"; else rm -f "$dst"; fi
     fi
@@ -116,6 +120,11 @@ open(sys.argv[2],"w").write(string.Template(src).substitute(os.environ))' "$tmpl
   chmod 600 "$tmp"
   mv -f "$tmp" "$dst"
   ok "$dst (rendered, chmod 600)"
+}
+
+remove_secret_config() {
+  [ -e "$1" ] || [ -L "$1" ] || return 0
+  if [ "$DRY_RUN" = 1 ]; then plan "remove stale secret config $1"; else rm -f "$1"; ok "removed stale secret config $1"; fi
 }
 
 have() { command -v "$1" >/dev/null 2>&1; }

@@ -15,7 +15,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -74,7 +73,7 @@ func resolveRepo(explicit string) (string, error) {
 		}
 		dir = parent
 	}
-	return "", errors.New("not inside an agent-config checkout — pass --repo /path/to/agent-config")
+	return "", errors.New("not inside an agent-config checkout: pass --repo /path/to/agent-config")
 }
 
 func validateRepo(dir string) error {
@@ -84,45 +83,6 @@ func validateRepo(dir string) error {
 		}
 	}
 	return nil
-}
-
-// have reports whether a binary is on PATH. Used only to warn — the scripts
-// themselves do the authoritative dependency check via shared/manifests/deps.json.
-func have(bin string) bool {
-	_, err := exec.LookPath(bin)
-	return err == nil
-}
-
-// agentDeps mirrors perAgent in shared/manifests/deps.json. Keyed by the same
-// flag the wizard passes to install.sh, so a new agent needs one entry here and
-// one choice in newModel.
-var agentDeps = map[string][]string{
-	"--claude": {"claude", "rtk", "bun"},
-	"--codex":  {"codex", "rtk"},
-	"--pi":     {"pi"},
-}
-
-// missingDeps reports which tools the *currently selected* agents need and the
-// host lacks. Warning only, and deliberately recomputed as the selection
-// changes — check_deps in lib/deps.sh is the authoritative gate.
-func missingDeps(agentFlags []string) []string {
-	want := []string{"git", "python3", "jq"} // deps.json "required"
-	for _, flag := range agentFlags {
-		want = append(want, agentDeps[flag]...)
-	}
-
-	var missing []string
-	seen := map[string]bool{}
-	for _, bin := range want {
-		if seen[bin] {
-			continue // rtk is shared by claude and codex
-		}
-		seen[bin] = true
-		if !have(bin) {
-			missing = append(missing, bin)
-		}
-	}
-	return missing
 }
 
 func joinArgs(args []string) string { return strings.Join(args, " ") }

@@ -45,7 +45,7 @@ _ensure_source() {
   # nothing would ever notice edits made straight into the cache.
   local dirty; dirty="$(git -C "$dir" status --porcelain 2>/dev/null || true)"
   if [ -n "$dirty" ]; then
-    warn "$3: clone cache modified locally — restore with: git -C $dir checkout --force --detach $commit"
+    warn "$3: clone cache modified locally: restore with: git -C $dir checkout --force --detach $commit"
   fi
   ok "$3 @ ${commit:0:12}"
 }
@@ -80,7 +80,7 @@ for name,s in m["sources"].items():
 
     # A failed checkout leaves HEAD elsewhere, where both guards below still pass.
     case "$failed_sources" in
-      *" ${src//\//__} "*) warn "$name: $src is not at its pinned commit — skipped"; continue ;;
+      *" ${src//\//__} "*) warn "$name: $src is not at its pinned commit: skipped"; continue ;;
     esac
 
     [ -d "$from" ] || { warn "$name: $path not present in $src at pinned commit"; continue; }
@@ -90,21 +90,21 @@ for name,s in m["sources"].items():
     # `|| true`: a bare assignment takes the substitution's status; rev-parse exits 128.
     local got; got="$(git -C "$dir" rev-parse --verify "$commit:$path" 2>/dev/null || true)"
     if [ "$got" != "$want" ]; then
-      warn "$name: tree $got does not match folderHash $want — skipped"
+      warn "$name: tree $got does not match folderHash $want: skipped"
       FAILURES=$((FAILURES + 1))
       continue
     fi
 
     # Untracked files live in no tree, so folderHash cannot see them.
     if [ -n "$(git -C "$dir" status --porcelain -- "$path" 2>/dev/null)" ]; then
-      warn "$name: worktree differs from the pinned tree — skipped"
+      warn "$name: worktree differs from the pinned tree: skipped"
       FAILURES=$((FAILURES + 1))
       continue
     fi
 
     # An empty installRoot from a malformed manifest would make this `rm -rf /$name`.
     if [ -z "$root" ] || [ -z "$name" ]; then
-      warn "skills.json: empty installRoot or name — refusing to remove $to"
+      warn "skills.json: empty installRoot or name: refusing to remove $to"
       FAILURES=$((FAILURES + 1))
       continue
     fi
@@ -146,7 +146,7 @@ install_wiki_skills() {
     want="$(jget "$WIKI_MANIFEST" commit || true)"
     if [ "$head" != "$want" ]; then
       at="${head:0:12}"
-      warn "$checkout is at ${at:-no commits yet}, wiki.json pins ${want:0:12} — bump the pin once you are happy with it"
+      warn "$checkout is at ${at:-no commits yet}, wiki.json pins ${want:0:12}: bump the pin once you are happy with it"
     fi
   fi
 }
@@ -160,7 +160,8 @@ link_skills() {
 
   run mkdir -p "$(expand_tilde "$dest")"
 
-  local name
+  local name previous_quiet="${QUIET:-0}"
+  QUIET=1
   while IFS= read -r name; do
     link "$root/$name" "$dest/$name"
   done < <(python3 -c 'import json,sys;print("\n".join(json.load(open(sys.argv[1]))["skills"]))' "$SKILLS_MANIFEST")
@@ -178,6 +179,8 @@ link_skills() {
     [ -d "$name" ] || continue
     link "$name" "$dest/$(basename "$name")"
   done
+  QUIET="$previous_quiet"
+  ok "$dest: skill links up to date"
 }
 
 # Dead links accumulate when a source repo is deleted (~/Desktop/Slides is the
@@ -200,31 +203,29 @@ prune_dead_links() {
   [ "$pruned" -eq 0 ] && skip "$dir (no dead links)" || ok "$dir: $pruned dead link(s)"
 }
 
-# Exact, recoverable reconciliation. Dot-directories remain agent-owned.
+# Remove only stale entries recorded by this installer; preserve user additions.
 reconcile_skill_links() {
   local dir="$1"; shift
   dir="$(expand_tilde "$dir")"
   [ -d "$dir" ] || return 0
-  local expected entry name removed=0
-  expected="$(python3 - "$SKILLS_MANIFEST" "$WIKI_MANIFEST" "$REPO_ROOT" "$dir" "$@" <<'PY'
-import json, os, sys
-s, w, repo, dest, *extra = sys.argv[1:]
-names = set(json.load(open(s))["skills"]) | set(extra)
-wiki = json.load(open(w))
-if dest in [os.path.expanduser(p) for p in wiki["linkInto"]]: names |= set(wiki["skills"])
-shared = os.path.join(repo, "shared", "skills")
-names |= {n for n in os.listdir(shared) if os.path.isdir(os.path.join(shared, n))}
-print("\n".join(sorted(names)))
-PY
-)"
-  for entry in "$dir"/*; do
-    [ -e "$entry" ] || [ -L "$entry" ] || continue
-    name="$(basename "$entry")"
-    printf '%s\n' "$expected" | grep -Fxq "$name" && continue
-    backup_path "$entry"
-    info "removed unmanaged skill $name"
-    removed=$((removed + 1))
-  done
+  local expected name removed=0 state="$dir/.agent-config-managed-skills"
+  expected="$(python3 "$REPO_ROOT/lib/expected_skills.py" \
+    "$SKILLS_MANIFEST" "$WIKI_MANIFEST" "$REPO_ROOT" "$dir" "$@")"
+  # Both sides come out of the same python `sorted()`, so comm can diff them.
+  if [ -f "$state" ]; then
+    while IFS= read -r name; do
+      [ -e "$dir/$name" ] || [ -L "$dir/$name" ] || continue
+      backup_path "$dir/$name"
+      [ "$DRY_RUN" = 1 ] || info "removed stale managed skill $name"
+      removed=$((removed + 1))
+    done < <(comm -23 "$state" <(printf '%s\n' "$expected"))
+  fi
+  if [ "$DRY_RUN" != 1 ]; then
+    local tmp; tmp="$(mktemp "${state}.tmp.XXXXXX")"
+    printf '%s\n' "$expected" > "$tmp"
+    mv -f "$tmp" "$state"
+  fi
   prune_dead_links "$dir"
-  [ "$removed" -eq 0 ] && skip "$dir (exact skill set)"
+  [ "$removed" -ne 0 ] || skip "$dir (managed skills current)"
+  return 0
 }
