@@ -46,7 +46,8 @@ backup_path() {
     return 0
   fi
   # Its own statement: `mkdir -p -m` only modes the deepest component.
-  mkdir -p -m 700 "$BACKUP_DIR"
+  mkdir -p "$BACKUP_DIR"
+  chmod 700 "$BACKUP_ROOT" "$BACKUP_DIR"
   mkdir -p "$(dirname "$dest")"
   mv "$target" "$dest"
   info "backed up $target -> $dest"
@@ -86,7 +87,7 @@ link() {
 # Render ${VAR} from the environment. Fails on unset vars, so a half-filled
 # secrets file never becomes an empty API key.
 render_template() {
-  local tmpl="$1" dst="$2" missing=()
+  local tmpl="$1" dst="$2" kind="${3:-config}" missing=()
   tmpl="$(expand_tilde "$tmpl")"; dst="$(expand_tilde "$dst")"
   [ -f "$tmpl" ] || { warn "template missing: $tmpl"; return 1; }
 
@@ -97,17 +98,23 @@ render_template() {
 
   if [ ${#missing[@]} -gt 0 ]; then
     warn "$(basename "$tmpl"): unset ${missing[*]} — see $SECRETS_FILE"
+    if [ "$kind" = secret ] && { [ -e "$dst" ] || [ -L "$dst" ]; }; then
+      if [ "$DRY_RUN" = 1 ]; then plan "remove stale secret config $dst"; else rm -f "$dst"; fi
+    fi
     return 1
   fi
   if [ "$DRY_RUN" = "1" ]; then plan "render $tmpl -> $dst"; return 0; fi
 
-  backup_path "$dst"
+  [ "$kind" = secret ] || backup_path "$dst"
   mkdir -p "$(dirname "$dst")"
-  # No envsubst on stock macOS.
-  python3 -c 'import os,sys,string
+  local tmp; tmp="$(mktemp "${dst}.tmp.XXXXXX")"
+  if ! python3 -c 'import os,sys,string
 src=open(sys.argv[1]).read()
-open(sys.argv[2],"w").write(string.Template(src).substitute(os.environ))' "$tmpl" "$dst"
-  chmod 600 "$dst"
+open(sys.argv[2],"w").write(string.Template(src).substitute(os.environ))' "$tmpl" "$tmp"; then
+    rm -f "$tmp"; return 1
+  fi
+  chmod 600 "$tmp"
+  mv -f "$tmp" "$dst"
   ok "$dst (rendered, chmod 600)"
 }
 

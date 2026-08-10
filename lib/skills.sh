@@ -199,3 +199,32 @@ prune_dead_links() {
   done
   [ "$pruned" -eq 0 ] && skip "$dir (no dead links)" || ok "$dir: $pruned dead link(s)"
 }
+
+# Exact, recoverable reconciliation. Dot-directories remain agent-owned.
+reconcile_skill_links() {
+  local dir="$1"; shift
+  dir="$(expand_tilde "$dir")"
+  [ -d "$dir" ] || return 0
+  local expected entry name removed=0
+  expected="$(python3 - "$SKILLS_MANIFEST" "$WIKI_MANIFEST" "$REPO_ROOT" "$dir" "$@" <<'PY'
+import json, os, sys
+s, w, repo, dest, *extra = sys.argv[1:]
+names = set(json.load(open(s))["skills"]) | set(extra)
+wiki = json.load(open(w))
+if dest in [os.path.expanduser(p) for p in wiki["linkInto"]]: names |= set(wiki["skills"])
+shared = os.path.join(repo, "shared", "skills")
+names |= {n for n in os.listdir(shared) if os.path.isdir(os.path.join(shared, n))}
+print("\n".join(sorted(names)))
+PY
+)"
+  for entry in "$dir"/*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    name="$(basename "$entry")"
+    printf '%s\n' "$expected" | grep -Fxq "$name" && continue
+    backup_path "$entry"
+    info "removed unmanaged skill $name"
+    removed=$((removed + 1))
+  done
+  prune_dead_links "$dir"
+  [ "$removed" -eq 0 ] && skip "$dir (exact skill set)"
+}

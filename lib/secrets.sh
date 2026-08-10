@@ -59,7 +59,13 @@ scaffold_secrets() {
       warn "$SECRETS_FILE is mode $mode; tightening to 600"
       run chmod 600 "$SECRETS_FILE"
     fi
-    set -a; . "$SECRETS_FILE"; set +a
+    local entry var value
+    for entry in "${SECRET_VARS[@]}"; do
+      var="${entry%%:*}"
+      value="$(secret_value "$SECRETS_FILE" "$var")"
+      printf -v "$var" '%s' "$value"
+      export "$var"
+    done
   fi
 
   local entry var unset_count=0
