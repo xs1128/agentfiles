@@ -1,5 +1,5 @@
 {
-  "$comment": "Where each vendored skill in config/skills came from. Sync with `scripts/sync-skills.sh`, which re-copies from the pinned commit and leaves the diff for review.",
+  "$comment": "Where each skill in skills/ came from. `scripts/sync-skills.sh` re-copies from the pinned commit and leaves the diff for review.",
   "sources": {
     "mattpocock/skills": {
       "repo": "https://github.com/mattpocock/skills",

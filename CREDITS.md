@@ -1,10 +1,10 @@
 # Credits
 
-This repository, and the image built from it, redistribute work by others.
+This repository redistributes work by others.
 
 ## Skills
 
-41 of the skills under `config/skills/` come from
+41 of the skills under `skills/` come from
 [mattpocock/skills](https://github.com/mattpocock/skills): 33 at commit
 `84fdeffd12f2ee307994d1eb6feb48173b6e0502`, and 8 more that the repo has since
 deleted, taken at the last commit that carried each.
@@ -17,19 +17,20 @@ deleted, taken at the last commit that carried each.
 
 ## Plugins
 
-The image installs plugins from marketplaces it does not own, each pinned to a
-commit in `manifests/plugins.json`. They are cloned at build time and remain
-under their own licenses:
+`bootstrap.sh` installs plugins from marketplaces this repo does not own, each
+pinned to a commit in `manifests/plugins.json`. They are cloned at install time
+and remain under their own licenses:
 
 - [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman)
 - [jarrodwatts/claude-hud](https://github.com/jarrodwatts/claude-hud)
-- [nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)
-- [anthropics/claude-plugins-official](https://github.com/anthropics/claude-plugins-official)
+
+The plugins Codex enables in `codex/plugins.toml.tmpl` ship with Codex itself
+and are not redistributed here.
 
 ## Tools
 
-`rtk` and `bun` are installed from their upstream installers at build time and
-are not redistributed as source here.
+Claude Code, Codex, `rtk` and `bun` are installed from their upstream installers
+by `install.sh` and are not redistributed as source here.
 
 ## License
 

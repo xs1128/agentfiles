@@ -1,6 +1,6 @@
 #!/bin/sh
-# Recopies vendored skills from the commits manifests/skills.json pins, so an
-# upstream change arrives as a reviewable diff rather than silently.
+# Recopies skills from the commits manifests/skills.json pins, so an upstream
+# change arrives as a reviewable diff rather than silently.
 set -eu
 
 repo="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -19,9 +19,9 @@ jq -r '.sources | to_entries[] | select(.value.commit) | "\(.value.repo) \(.valu
       while read -r skill; do
         src="$(find "$clone" -type d -name "$skill" | head -1)"
         [ -n "$src" ] || { echo "missing upstream: $skill" >&2; continue; }
-        rm -rf "$repo/config/skills/$skill"
-        cp -R "$src" "$repo/config/skills/$skill"
+        rm -rf "$repo/skills/$skill"
+        cp -R "$src" "$repo/skills/$skill"
       done
   done
 
-echo "done; review with: git -C $repo diff --stat config/skills"
+echo "done; review with: git -C $repo diff --stat skills"

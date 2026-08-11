@@ -28,10 +28,7 @@
   },
   "enabledPlugins": {
     "caveman@caveman": true,
-    "claude-hud@claude-hud": true,
-    "ui-ux-pro-max@ui-ux-pro-max-skill": true,
-    "figma@claude-plugins-official": true,
-    "swift-lsp@claude-plugins-official": true
+    "claude-hud@claude-hud": true
   },
   "extraKnownMarketplaces": {
     "caveman": {
@@ -45,21 +42,9 @@
         "source": "github",
         "repo": "jarrodwatts/claude-hud"
       }
-    },
-    "ui-ux-pro-max-skill": {
-      "source": {
-        "source": "github",
-        "repo": "nextlevelbuilder/ui-ux-pro-max-skill"
-      }
-    },
-    "claude-plugins-official": {
-      "source": {
-        "source": "github",
-        "repo": "anthropics/claude-plugins-official"
-      }
     }
   },
   "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
-  "$comment": "Symlinked into ~/.claude by `make link` on the mac, copied into the image everywhere else. Read at launch, so restart Claude after editing."
+  "$comment": "Symlinked into ~/.claude by scripts/link.sh. Read at launch, so restart Claude after editing."
 }

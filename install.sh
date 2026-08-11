@@ -1,30 +1,35 @@
 #!/bin/sh
-# Sets this config up on a mac or linux box: dependencies, then ~/.claude, then
-# the plugins and MCP servers the manifests pin. No sudo.
-# Usage: sh install.sh [--no-deps] [--no-bootstrap]
+# Sets this config up on mac or linux. Skills and plugins only; MCP needs --mcp.
+# Usage: sh install.sh [--no-deps] [--no-bootstrap] [--no-codex] [--mcp]
 set -eu
 
 repo="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 bin="$HOME/.local/bin"
 deps=1
 bootstrap=1
+codex=1
+mcp=0
 for arg in "$@"; do
   case "$arg" in
     --no-deps) deps=0 ;;
     --no-bootstrap) bootstrap=0 ;;
-    *) echo "usage: install.sh [--no-deps] [--no-bootstrap]" >&2; exit 2 ;;
+    --no-codex) codex=0 ;;
+    --mcp) mcp=1 ;;
+    *) echo "usage: install.sh [--no-deps] [--no-bootstrap] [--no-codex] [--mcp]" >&2; exit 2 ;;
   esac
 done
 
-if [ ! -d "$repo/config" ]; then
-  echo "install.sh: run this from a clone; it links config/ out of the repo." >&2
-  echo "  git clone https://github.com/xs1128/agentfiles && sh agentfiles/install.sh" >&2
+if [ ! -d "$repo/claude" ]; then
+  echo "install.sh: run this from a clone; it links claude/ out of the repo." >&2
+  echo "  git clone git@github.com:xs1128/agentfiles.git ~/.agentfiles && sh ~/.agentfiles/install.sh" >&2
   exit 1
 fi
 
-# What no installer of ours can put there for free.
+# node only matters for the MCP servers, which are npm packages.
+required="curl git jq"
+if [ "$mcp" -eq 1 ]; then required="$required node npm"; fi
 missing=''
-for tool in node npm git jq; do
+for tool in $required; do
   command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
 done
 if [ -n "$missing" ]; then
@@ -38,21 +43,27 @@ fi
 
 mkdir -p "$bin"
 
+# Before the installs: what they drop here must run in this same shell.
+PATH="$bin:$HOME/.bun/bin:$PATH"
+export PATH
+
 if [ "$deps" -eq 1 ]; then
-  # A system node puts its global prefix somewhere only root can write, and this
-  # install is meant to be sudo-free.
-  if [ ! -w "$(npm root -g 2>/dev/null || echo /)" ]; then
-    npm config set prefix "$HOME/.local"
-    echo "npm global prefix moved to $HOME/.local (it was not writable)"
-  fi
-
   if command -v claude >/dev/null 2>&1; then
-    echo "claude already installed: $(command -v claude)"
+    claude update || echo "claude update failed; continuing"
   else
-    npm install -g @anthropic-ai/claude-code
+    curl -fsSL https://claude.ai/install.sh | bash
+  fi
+  echo "claude: $(claude --version 2>/dev/null || echo 'not on PATH yet')"
+
+  if [ "$codex" -eq 1 ]; then
+    if command -v codex >/dev/null 2>&1; then
+      codex update || echo "codex update failed; continuing"
+    else
+      curl -fsSL https://chatgpt.com/codex/install.sh | sh
+    fi
+    echo "codex: $(codex --version 2>/dev/null || echo 'not on PATH yet')"
   fi
 
-  # claude-hud's statusline runs under bun.
   if command -v bun >/dev/null 2>&1 || [ -x "$HOME/.bun/bin/bun" ]; then
     echo "bun already installed"
   else
@@ -66,8 +77,9 @@ if [ "$deps" -eq 1 ]; then
   fi
 fi
 
-ln -sf "$repo/scripts/glm.sh" "$bin/claude-glm"
-echo "installed $bin/claude-glm"
+rm -f "$bin/claude-glm"
+ln -sf "$repo/scripts/glm.sh" "$bin/glm"
+echo "installed $bin/glm"
 
 case "$(basename "${SHELL:-/bin/sh}")" in
   zsh)  rc="$HOME/.zshrc" ;;
@@ -89,16 +101,25 @@ else
   echo "wired $rc"
 fi
 
-# The steps below need what was just installed, which is not on this shell's PATH yet.
-PATH="$bin:$HOME/.bun/bin:$PATH"
-export PATH
-
 sh "$repo/scripts/link.sh"
+if [ "$codex" -eq 1 ]; then
+  sh "$repo/scripts/link-codex.sh"
+fi
 
 if [ "$bootstrap" -eq 1 ]; then
-  sh "$repo/scripts/bootstrap.sh"
+  if [ "$mcp" -eq 1 ]; then
+    sh "$repo/scripts/bootstrap.sh" --mcp
+  else
+    sh "$repo/scripts/bootstrap.sh"
+  fi
 fi
 
 echo
 echo "done. run 'exec \$SHELL' or open a new terminal, then: claude"
-echo "for z.ai's GLM instead: claude-glm   (needs ZAI_API_KEY, see .env.example)"
+if [ "$codex" -eq 1 ]; then
+  echo "or, for the same skills under OpenAI's harness: codex"
+fi
+echo "for z.ai's GLM instead: glm   (needs ZAI_API_KEY, see .env.example)"
+if [ "$mcp" -eq 0 ]; then
+  echo "no MCP servers installed; add them with: sh scripts/bootstrap.sh --mcp"
+fi

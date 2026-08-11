@@ -1,33 +1,34 @@
 #!/bin/sh
-# Points ~/.claude at config/. Whatever was there first is moved aside, not deleted.
+# Points ~/.claude at claude/. What was there is moved aside, not deleted.
 set -eu
 
 repo="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 target="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 backup="$target/backups/link-$(date +%Y%m%d-%H%M%S)"
 
-mkdir -p "$target"
-for entry in CLAUDE.md RTK.md settings.json agents skills workflows mcp \
-             hud-statusline.sh statusline.sh; do
-  dst="$target/$entry"
-  # -L first: a dangling symlink fails -e but still has to be moved.
+link() {
+  dst="$target/$2"
+  # -L first: a dangling symlink fails -e but still has to move.
   if [ -L "$dst" ] || [ -e "$dst" ]; then
-    mkdir -p "$backup"
-    mv "$dst" "$backup/$entry"
+    mkdir -p "$backup/$(dirname "$2")"
+    mv "$dst" "$backup/$2"
   fi
-  ln -s "$repo/config/$entry" "$dst"
-  echo "linked $entry"
+  ln -s "$1" "$dst"
+  echo "linked $2"
+}
+
+mkdir -p "$target"
+for entry in CLAUDE.md RTK.md settings.json agents workflows mcp \
+             hud-statusline.sh statusline.sh; do
+  link "$repo/claude/$entry" "$entry"
 done
 
-# plugins/ is claude's own writable tree, so only the file we own is linked into it.
+# Outside claude/ because Codex loads the same directories.
+link "$repo/skills" skills
+
+# plugins/ is claude's own writable tree, so only link the file we own.
 mkdir -p "$target/plugins/claude-hud"
-dst="$target/plugins/claude-hud/config.json"
-if [ -L "$dst" ] || [ -e "$dst" ]; then
-  mkdir -p "$backup"
-  mv "$dst" "$backup/claude-hud-config.json"
-fi
-ln -s "$repo/config/plugins/claude-hud/config.json" "$dst"
-echo "linked plugins/claude-hud/config.json"
+link "$repo/claude/plugins/claude-hud/config.json" plugins/claude-hud/config.json
 
 if [ -d "$backup" ]; then
   echo "previous entries moved to $backup"
