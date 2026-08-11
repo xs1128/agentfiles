@@ -7,7 +7,7 @@ target="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 backup="$target/backups/link-$(date +%Y%m%d-%H%M%S)"
 
 mkdir -p "$target"
-for entry in CLAUDE.md RTK.md settings.json agents skills workflows mcp profiles \
+for entry in CLAUDE.md RTK.md settings.json agents skills workflows mcp \
              hud-statusline.sh statusline.sh; do
   dst="$target/$entry"
   # -L first: a dangling symlink fails -e but still has to be moved.
@@ -19,4 +19,16 @@ for entry in CLAUDE.md RTK.md settings.json agents skills workflows mcp profiles
   echo "linked $entry"
 done
 
-[ -d "$backup" ] && echo "previous entries moved to $backup"
+# plugins/ is claude's own writable tree, so only the file we own is linked into it.
+mkdir -p "$target/plugins/claude-hud"
+dst="$target/plugins/claude-hud/config.json"
+if [ -L "$dst" ] || [ -e "$dst" ]; then
+  mkdir -p "$backup"
+  mv "$dst" "$backup/claude-hud-config.json"
+fi
+ln -s "$repo/config/plugins/claude-hud/config.json" "$dst"
+echo "linked plugins/claude-hud/config.json"
+
+if [ -d "$backup" ]; then
+  echo "previous entries moved to $backup"
+fi

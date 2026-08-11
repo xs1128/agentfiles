@@ -1,5 +1,2 @@
 .env
 .DS_Store
-*.sif
-*.sqsh
-*.tar

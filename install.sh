@@ -1,27 +1,74 @@
 #!/bin/sh
-# Puts the launcher on $PATH and wires the shell to find it.
-# Usage: curl -fsSL .../install.sh | sh [-s -- --alias]
+# Sets this config up on a mac or linux box: dependencies, then ~/.claude, then
+# the plugins and MCP servers the manifests pin. No sudo.
+# Usage: sh install.sh [--no-deps] [--no-bootstrap]
 set -eu
 
-RAW=https://raw.githubusercontent.com/xs1128/agentfiles/main/agent
-bin="${AGENT_BIN_DIR:-$HOME/.local/bin}"
-alias_claude=0
-[ "${1:-}" = --alias ] && alias_claude=1
+repo="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+bin="$HOME/.local/bin"
+deps=1
+bootstrap=1
+for arg in "$@"; do
+  case "$arg" in
+    --no-deps) deps=0 ;;
+    --no-bootstrap) bootstrap=0 ;;
+    *) echo "usage: install.sh [--no-deps] [--no-bootstrap]" >&2; exit 2 ;;
+  esac
+done
+
+if [ ! -d "$repo/config" ]; then
+  echo "install.sh: run this from a clone; it links config/ out of the repo." >&2
+  echo "  git clone https://github.com/xs1128/agentfiles && sh agentfiles/install.sh" >&2
+  exit 1
+fi
+
+# What no installer of ours can put there for free.
+missing=''
+for tool in node npm git jq; do
+  command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+done
+if [ -n "$missing" ]; then
+  echo "install.sh: missing:$missing" >&2
+  case "$(uname -s)" in
+    Darwin) echo "  brew install$missing" >&2 ;;
+    *)      echo "  sudo apt install$missing   (or your distro's equivalent)" >&2 ;;
+  esac
+  exit 1
+fi
 
 mkdir -p "$bin"
-# Piped through sh, $0 is "sh" and there is no local copy to prefer.
-here=''
-[ -f "$0" ] && here="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
-if [ -n "$here" ] && [ -f "$here/agent" ]; then
-  cp "$here/agent" "$bin/agent"
-else
-  curl -fsSL -o "$bin/agent" "$RAW"
-fi
-chmod +x "$bin/agent"
-echo "installed $bin/agent"
 
-# Login shells read different files, and getting this wrong is the whole point of
-# automating it.
+if [ "$deps" -eq 1 ]; then
+  # A system node puts its global prefix somewhere only root can write, and this
+  # install is meant to be sudo-free.
+  if [ ! -w "$(npm root -g 2>/dev/null || echo /)" ]; then
+    npm config set prefix "$HOME/.local"
+    echo "npm global prefix moved to $HOME/.local (it was not writable)"
+  fi
+
+  if command -v claude >/dev/null 2>&1; then
+    echo "claude already installed: $(command -v claude)"
+  else
+    npm install -g @anthropic-ai/claude-code
+  fi
+
+  # claude-hud's statusline runs under bun.
+  if command -v bun >/dev/null 2>&1 || [ -x "$HOME/.bun/bin/bun" ]; then
+    echo "bun already installed"
+  else
+    curl -fsSL https://bun.sh/install | bash
+  fi
+
+  if command -v rtk >/dev/null 2>&1 || [ -x "$bin/rtk" ]; then
+    echo "rtk already installed"
+  else
+    curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh | sh
+  fi
+fi
+
+ln -sf "$repo/scripts/glm.sh" "$bin/claude-glm"
+echo "installed $bin/claude-glm"
+
 case "$(basename "${SHELL:-/bin/sh}")" in
   zsh)  rc="$HOME/.zshrc" ;;
   bash) if [ -f "$HOME/.bash_profile" ]; then rc="$HOME/.bash_profile"; else rc="$HOME/.bashrc"; fi ;;
@@ -34,15 +81,24 @@ else
   {
     echo ''
     echo '# agentfiles'
-    echo 'case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) PATH="$HOME/.local/bin:$PATH" ;; esac'
+    echo 'for d in "$HOME/.local/bin" "$HOME/.bun/bin"; do'
+    echo '  case ":$PATH:" in *":$d:"*) ;; *) PATH="$d:$PATH" ;; esac'
+    echo 'done'
     echo 'export PATH'
-    if [ "$alias_claude" -eq 1 ]; then echo "alias claude='agent'"; fi
   } >> "$rc"
   echo "wired $rc"
 fi
 
-if [ "$alias_claude" -eq 1 ] && command -v claude >/dev/null 2>&1; then
-  echo "note: claude is already installed natively at $(command -v claude); the alias now shadows it in new shells"
+# The steps below need what was just installed, which is not on this shell's PATH yet.
+PATH="$bin:$HOME/.bun/bin:$PATH"
+export PATH
+
+sh "$repo/scripts/link.sh"
+
+if [ "$bootstrap" -eq 1 ]; then
+  sh "$repo/scripts/bootstrap.sh"
 fi
 
-echo "run 'exec \$SHELL' or open a new terminal, then: agent"
+echo
+echo "done. run 'exec \$SHELL' or open a new terminal, then: claude"
+echo "for z.ai's GLM instead: claude-glm   (needs ZAI_API_KEY, see .env.example)"
