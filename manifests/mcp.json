@@ -1,0 +1,18 @@
+{
+  "$comment": "Packages the image installs globally so the servers in config/mcp/ start from a binary rather than resolving through npx at every session.",
+  "$why": "No server is loaded by default. The launcher passes --mcp-config for the categories asked for and --strict-mcp-config, because an MCP server's cost is the tool definitions it puts in every prompt, not the disk it occupies.",
+  "packages": {
+    "@playwright/mcp": {
+      "version": "0.0.78",
+      "bin": "playwright-mcp",
+      "category": "web",
+      "why": "browser automation as tool calls. No browser is installed, so the tools error until one is: the image is for code, not for driving Chrome"
+    },
+    "firebase-tools": {
+      "version": "15.25.1",
+      "bin": "firebase",
+      "category": "cloud",
+      "why": "Firestore, Auth, Hosting, App Hosting, deploys. `--dir .` resolves the project from the cwd, so it follows whichever repo is mounted"
+    }
+  }
+}

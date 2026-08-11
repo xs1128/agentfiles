@@ -1,0 +1,79 @@
+{
+  "$comment": "Where each vendored skill in config/skills came from. Sync with `scripts/sync-skills.sh`, which re-copies from the pinned commit and leaves the diff for review.",
+  "sources": {
+    "mattpocock/skills": {
+      "repo": "https://github.com/mattpocock/skills",
+      "commit": "84fdeffd12f2ee307994d1eb6feb48173b6e0502",
+      "license": "MIT",
+      "notice": "CREDITS.md",
+      "skills": [
+        "ask-matt",
+        "claude-handoff",
+        "code-review",
+        "codebase-design",
+        "diagnosing-bugs",
+        "domain-modeling",
+        "git-guardrails-claude-code",
+        "grill-me",
+        "grill-with-docs",
+        "grilling",
+        "handoff",
+        "implement",
+        "improve-codebase-architecture",
+        "loop-me",
+        "migrate-to-shoehorn",
+        "prototype",
+        "research",
+        "resolving-merge-conflicts",
+        "scaffold-exercises",
+        "setup-matt-pocock-skills",
+        "setup-pre-commit",
+        "setup-ts-deep-modules",
+        "tdd",
+        "teach",
+        "to-questionnaire",
+        "to-spec",
+        "to-tickets",
+        "triage",
+        "wayfinder",
+        "wizard",
+        "writing-beats",
+        "writing-fragments",
+        "writing-shape"
+      ]
+    },
+    "mattpocock/skills (removed upstream)": {
+      "$comment": "Deleted from the default branch since these copies were taken. Same repo, same MIT license; the commit named is the last one that carried them, and the status is the directory upstream filed them under before deleting.",
+      "repo": "https://github.com/mattpocock/skills",
+      "license": "MIT",
+      "notice": "CREDITS.md",
+      "skills": {
+        "batch-grill-me": {"commit": "a4b2009a", "status": "in-progress"},
+        "design-an-interface": {"commit": "c66bdeee", "status": "deprecated"},
+        "qa": {"commit": "c66bdeee", "status": "deprecated"},
+        "request-refactor-plan": {"commit": "c66bdeee", "status": "deprecated"},
+        "ubiquitous-language": {"commit": "c66bdeee", "status": "deprecated"},
+        "edit-article": {"commit": "c66bdeee", "status": "author's personal"},
+        "obsidian-vault": {"commit": "c66bdeee", "status": "author's personal"},
+        "writing-great-skills": {"commit": "1fc6573e", "status": "superseded by writing-for-agents"}
+      }
+    },
+    "emilkowalski/skills": {
+      "repo": "https://github.com/emilkowalski/skills",
+      "commit": "78761e1b57f97dce65b983d640c70a68f39e8163",
+      "license": "MIT",
+      "notice": "CREDITS.md",
+      "skills": [
+        "emil-design-eng"
+      ]
+    },
+    "own": {
+      "license": "MIT",
+      "skills": [
+        "confession-translate",
+        "plot-training-log",
+        "pptx-extract"
+      ]
+    }
+  }
+}

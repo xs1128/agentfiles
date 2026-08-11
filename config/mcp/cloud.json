@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "firebase": {
+      "command": "firebase",
+      "args": ["mcp", "--dir", "."],
+      "env": {
+        "IS_FIREBASE_MCP": "true"
+      }
+    }
+  }
+}
