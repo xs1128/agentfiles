@@ -18,7 +18,7 @@ link() {
 }
 
 mkdir -p "$target"
-for entry in CLAUDE.md RTK.md settings.json agents workflows mcp \
+for entry in CLAUDE.md RTK.md settings.json agents workflows mcp output-styles \
              hud-statusline.sh statusline.sh; do
   link "$repo/claude/$entry" "$entry"
 done

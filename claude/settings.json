@@ -9,6 +9,7 @@
     "pr": ""
   },
   "model": "opus[1m]",
+  "outputStyle": "ELI5",
   "hooks": {
     "PreToolUse": [
       {
