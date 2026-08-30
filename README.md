@@ -29,22 +29,25 @@ effect next session, in either harness.
 
 ## Codex
 
-Three things, nothing else: rtk, the skills, the bundled plugins.
+Four things, nothing else: rtk, the skills, two context limits, and the bundled
+plugins.
 
     codex/AGENTS.md   → ~/.codex/AGENTS.md   the rtk rule
     skills/*          → ~/.codex/skills/*    the same 45 directories Claude gets
+    config.toml.tmpl  → merged into ~/.codex/config.toml
     plugins.toml.tmpl → appended to ~/.codex/config.toml
 
 Codex has no PreToolUse hook, so rtk is an instruction in `AGENTS.md` rather
 than a rewrite. It costs a few tokens per session that the Claude side gets for
 free.
 
-`config.toml` is Codex's own — it writes to it during sessions — so the plugin
-enables are appended instead of symlinked, and only for a block the file does
-not already have. Nothing there is ever rewritten, so a plugin you turned off by
-hand stays off, and the previous copy lands in `~/.codex/backups/`. Model and
-reasoning effort are deliberately not pinned: they are set in Codex's UI, and
-writing them here would revert that on every install.
+`config.toml` is Codex's own — it writes to it during sessions — so the two
+context limits and plugin enables are merged instead of symlinked, and only when
+their key or block is absent. Nothing there is ever rewritten, so a plugin you
+turned off by hand stays off, and the previous copy lands in
+`~/.codex/backups/`. Model and reasoning effort are deliberately not pinned:
+they are set in Codex's UI, and writing them here would revert that on every
+install.
 
 Re-link without touching the rest:
 

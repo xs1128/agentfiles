@@ -52,13 +52,67 @@ for src in "$repo"/skills/*/; do
 done
 echo "linked $linked skills into $target/skills"
 
-# Plugins. Codex writes config.toml during sessions, so the enables are appended
-# rather than linked. Append-only, and only for a [plugins."..."] header the file
-# does not already have: nothing here can rewrite a key Codex or you set, and a
-# plugin turned off by hand stays off. Parsing the file would risk more than it
-# buys, so this is grep, not TOML.
+# Config. Codex writes config.toml during sessions, so our top-level settings
+# and plugin enables are merged rather than linked. Nothing already set is
+# rewritten.
 config="$target/config.toml"
+settings="$repo/codex/config.toml.tmpl"
 tmpl="$repo/codex/plugins.toml.tmpl"
+config_existed=0
+[ -f "$config" ] && config_existed=1 || : > "$config"
+config_backed_up=0
+
+backup_config() {
+  if [ "$config_existed" -eq 1 ] && [ "$config_backed_up" -eq 0 ]; then
+    mkdir -p "$backup"
+    cp "$config" "$backup/config.toml"
+    config_backed_up=1
+  fi
+}
+
+missing_settings="$(awk -v cfg="$config" '
+  BEGIN {
+    while ((getline line < cfg) > 0) {
+      if (line ~ /^\[/) break
+      key = line
+      sub(/[[:space:]]*=.*/, "", key)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      if (key != line) seen[key] = 1
+    }
+    close(cfg)
+  }
+  /^[[:space:]]*#/ || !NF { next }
+  {
+    key = $0
+    sub(/[[:space:]]*=.*/, "", key)
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+    if (!seen[key]) print
+  }
+' "$settings")"
+
+if [ -n "$missing_settings" ]; then
+  backup_config
+  tmp="$(mktemp "$target/.config.toml.XXXXXX")"
+  trap 'rm -f "$tmp"' EXIT HUP INT TERM
+  printf '%s\n' "$missing_settings" | awk '
+    FILENAME == "-" { additions[++count] = $0; next }
+    !added && /^\[/ {
+      for (i = 1; i <= count; i++) print additions[i]
+      print ""
+      added = 1
+    }
+    { print }
+    END {
+      if (!added) {
+        if (NR) print ""
+        for (i = 1; i <= count; i++) print additions[i]
+      }
+    }
+  ' - "$config" > "$tmp"
+  mv "$tmp" "$config"
+  trap - EXIT HUP INT TERM
+  echo "added missing context settings to config.toml"
+fi
 
 missing="$(awk -v cfg="$config" '
   BEGIN { while ((getline line < cfg) > 0) seen[line] = 1; close(cfg) }
@@ -68,12 +122,9 @@ missing="$(awk -v cfg="$config" '
 ' "$tmpl")"
 
 if [ -n "$missing" ]; then
-  if [ -f "$config" ]; then
-    mkdir -p "$backup"
-    cp "$config" "$backup/config.toml"
-    # A file not ending in a newline would swallow the first header.
-    [ -n "$(tail -c 1 "$config")" ] && echo '' >> "$config"
-  fi
+  backup_config
+  # A file not ending in a newline would swallow the first header.
+  [ -n "$(tail -c 1 "$config")" ] && echo '' >> "$config"
   printf '%s\n' "$missing" >> "$config"
   echo "added $(printf '%s\n' "$missing" | grep -c '^\[') plugin enables to config.toml"
 else
