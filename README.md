@@ -1,151 +1,34 @@
 # agentfiles
 
-My Claude Code and Codex setup — memory, subagents, skills, plugins — as a repo
-you clone and link. Mac and Linux, one script, no sudo.
-
-## Install
+Claude Code and Codex setup for macOS, Linux, and WSL.
 
 ```sh
-git clone git@github.com:xs1128/agentfiles.git ~/.agentfiles
+git clone https://github.com/xs1128/agentfiles ~/.agentfiles
 sh ~/.agentfiles/install.sh
-exec $SHELL
 ```
 
-Installs Claude Code, Codex, bun and rtk if missing, symlinks `claude/` into
-`~/.claude` and `codex/` into `~/.codex`, and installs the pinned plugins.
-Needs `curl`, `git`, `jq`.
+Needs `curl`, `git`, `jq` and `unzip`. Rerun to update; a rerun with nothing new
+changes nothing. Anything it replaces goes to `~/.agentfiles-backup/`.
 
-Rerun it to update. Safe to rerun.
+## Everything is off
 
-| flag | effect |
-| --- | --- |
-| `--no-deps` | skip the installs |
-| `--no-bootstrap` | skip the plugins |
-| `--no-codex` | Claude Code only |
-| `--mcp` | also install the MCP servers (needs node) |
+All skills and MCP servers are installed but off, so they cost no context and
+no start-up time. Built-in ones are untouched.
 
-Because both directories are symlinks into the clone, editing a skill here takes
-effect next session, in either harness.
-
-## Codex
-
-Four things, nothing else: rtk, the skills, two context limits, and the bundled
-plugins.
-
-    codex/AGENTS.md   → ~/.codex/AGENTS.md   the rtk rule
-    skills/*          → ~/.codex/skills/*    the same 45 directories Claude gets
-    config.toml.tmpl  → merged into ~/.codex/config.toml
-    plugins.toml.tmpl → appended to ~/.codex/config.toml
-
-Codex has no PreToolUse hook, so rtk is an instruction in `AGENTS.md` rather
-than a rewrite. It costs a few tokens per session that the Claude side gets for
-free.
-
-`config.toml` is Codex's own — it writes to it during sessions — so the two
-context limits and plugin enables are merged instead of symlinked, and only when
-their key or block is absent. Nothing there is ever rewritten, so a plugin you
-turned off by hand stays off, and the previous copy lands in
-`~/.codex/backups/`. Model and reasoning effort are deliberately not pinned:
-they are set in Codex's UI, and writing them here would revert that on every
-install.
-
-Re-link without touching the rest:
-
-```sh
-sh scripts/link-codex.sh
-```
-
-## GLM
-
-Put the key in `~/.agent.env`, readable only by you:
-
-```sh
-install -m 600 /dev/null ~/.agent.env
-echo 'ZAI_API_KEY=your-key-here' >> ~/.agent.env
-```
-
-Then:
-
-```sh
-glm
-```
-
-Same config against z.ai: opus → `glm-5.2`, sonnet → `glm-5-turbo`, haiku →
-`glm-4.7`. Plain `claude` is unaffected. `ZAI_API_KEY` in the environment wins
-over the file.
-
-## MCP
-
-Not installed by default, and never loaded implicitly — a server costs tool
-definitions in every prompt.
-
-```sh
-sh scripts/bootstrap.sh --mcp
-```
-
-Then load per session:
-
-```sh
-claude --mcp-config ~/.claude/mcp/web.json --strict-mcp-config    # playwright
-claude --mcp-config ~/.claude/mcp/cloud.json --strict-mcp-config  # firebase
-```
-
-Playwright's tools error until a browser is installed: `npx playwright install
-chromium`.
-
-## Skills
-
-Loaded by both harnesses out of `skills/`. Vendored from upstream at pinned
-commits. To pull newer ones:
-
-```sh
-sh scripts/sync-skills.sh
-```
-
-That recopies from the commits `manifests/skills.json` names, so upstream changes
-arrive as a reviewable diff.
-
-## Plugins
-
-`caveman` and `claude-hud` only, pinned in `manifests/plugins.json`. Change a pin
-and rerun `sh scripts/bootstrap.sh`.
+| | Claude Code | Codex |
+| --- | --- | --- |
+| Run a skill | `/name` | `$name` |
+| Keep a skill on | `"skillOverrides": {"name": "on"}` in `~/.claude/settings.json` | `allow_implicit_invocation: true` in `skills/name/agents/openai.yaml` |
+| Use an MCP server | `claude --mcp-config ~/.claude/mcp/figma.json` | `codex -c mcp_servers.figma.enabled=true` |
 
 ## Layout
 
-    claude/       symlinked into ~/.claude
-    codex/        symlinked into ~/.codex
-    skills/       loaded by both
-    manifests/    pinned plugins, MCP packages, skill sources
-    scripts/      link, link-codex, bootstrap, glm, sync-skills
-    install.sh
+| Repo | Goes to |
+| --- | --- |
+| `claude/` | `~/.claude` as links. `settings.json` is merged: repo keys win, machine keys stay. |
+| `codex/AGENTS.md` | `~/.codex/AGENTS.md` |
+| `skills/` | `~/.claude/skills` and `~/.agents/skills` |
+| `mcp/` | `~/.claude/mcp`, and disabled entries in `~/.codex/config.toml` |
+| `bin/glm` | `~/.local/bin/glm`: Claude Code on z.ai, key in `~/.agent.env` as `ZAI_API_KEY=...` |
 
-## Uninstall
-
-Everything this repo puts on the machine is a symlink into the clone, so
-unlinking is most of the job:
-
-```sh
-find ~/.claude ~/.codex -maxdepth 2 -type l \
-  -exec sh -c 'readlink "$1" | grep -q "/.agentfiles/" && rm "$1"' _ {} \;
-rm -f ~/.local/bin/glm ~/.codex/skills/.agentfiles-managed
-```
-
-Then drop the `# agentfiles` block from your shell rc. Whatever was replaced is
-under `~/.claude/backups/` and `~/.codex/backups/`. The plugin blocks appended to
-`~/.codex/config.toml` are left behind; delete them by hand.
-
-The tools are a separate question, and both of these throw away auth and history:
-
-```sh
-rm -rf ~/.local/bin/claude ~/.local/share/claude ~/.claude ~/.claude.json
-rm -rf ~/.codex ~/.local/bin/codex ~/.local/bin/codex-code-mode-host
-```
-
-Codex keeps its binary under `~/.codex`, so that one line takes the install with
-it. `bun` is `rm -rf ~/.bun`. rtk ships no uninstaller — delete whatever `which
-rtk` names.
-
-## Attribution
-
-Most skills are other people's work, MIT licensed and vendored. See
-[CREDITS.md](CREDITS.md).
+Credits: [CREDITS.md](CREDITS.md).

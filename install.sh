@@ -1,125 +1,59 @@
 #!/bin/sh
-# Sets this config up on mac or linux. Skills and plugins only; MCP needs --mcp.
-# Usage: sh install.sh [--no-deps] [--no-bootstrap] [--no-codex] [--mcp]
 set -eu
+r=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+c=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+x=${CODEX_HOME:-$HOME/.codex}
+bak=$HOME/.agentfiles-backup/$(date +%Y%m%d-%H%M%S)
+export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH"
 
-repo="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
-bin="$HOME/.local/bin"
-deps=1
-bootstrap=1
-codex=1
-mcp=0
-for arg in "$@"; do
-  case "$arg" in
-    --no-deps) deps=0 ;;
-    --no-bootstrap) bootstrap=0 ;;
-    --no-codex) codex=0 ;;
-    --mcp) mcp=1 ;;
-    *) echo "usage: install.sh [--no-deps] [--no-bootstrap] [--no-codex] [--mcp]" >&2; exit 2 ;;
-  esac
+for t in curl git jq unzip; do command -v $t >/dev/null || { echo "install $t first" >&2; exit 1; }; done
+command -v claude >/dev/null || curl -fsSL https://claude.ai/install.sh | bash
+command -v codex >/dev/null || curl -fsSL https://chatgpt.com/codex/install.sh | sh
+command -v bun >/dev/null || curl -fsSL https://bun.sh/install | bash
+command -v rtk >/dev/null || curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh | sh
+
+link() {
+  [ "$(readlink "$2")" = "$1" ] && return
+  mkdir -p "$(dirname "$2")"
+  if [ -L "$2" ]; then rm "$2"
+  elif [ -e "$2" ]; then mkdir -p "$bak"; mv "$2" "$bak/$(echo "$2" | tr / _)"; fi
+  ln -s "$1" "$2"
+}
+for f in CLAUDE.md RTK.md agents workflows output-styles hud-statusline.sh; do link "$r/claude/$f" "$c/$f"; done
+link "$r/claude/hud.json" "$c/plugins/claude-hud/config.json"
+link "$r/skills" "$c/skills"
+link "$r/mcp" "$c/mcp"
+link "$r/skills" "$HOME/.agents/skills"
+link "$r/codex/AGENTS.md" "$x/AGENTS.md"
+link "$r/bin/glm" "$HOME/.local/bin/glm"
+find "$x/skills" -maxdepth 1 -type l -lname "$r/*" -exec rm {} + 2>/dev/null || true
+
+s=$c/settings.json
+o=$(for d in "$r"/skills/*/; do basename "$d"; done | jq -R '{(.): "user-invocable-only"}' | jq -s 'add // {}')
+{ cat "$s" 2>/dev/null || echo '{}'; } | jq --slurpfile n "$r/claude/settings.json" --argjson o "$o" '
+  def m($a; $b): if ($a|type) == "object" and ($b|type) == "object" then reduce ($b|keys[]) as $k ($a; .[$k] = m($a[$k]; $b[$k]))
+    elif ($a|type) == "array" and ($b|type) == "array" then $a + ($b - $a) else $b end;
+  m(.; $n[0]) | .skillOverrides = $o + (.skillOverrides // {})' > "$s.new"
+if [ -L "$s" ] || ! cmp -s "$s.new" "$s"; then mv "$s.new" "$s"; else rm "$s.new"; fi
+
+t=$x/config.toml
+[ -e "$t" ] || : > "$t"
+for kv in 'model_context_window = 1000000' 'model_auto_compact_token_limit = 200000'; do
+  grep -q "^${kv%% *} *=" "$t" || { printf '%s\n' "$kv" | cat - "$t" > "$t.new"; mv "$t.new" "$t"; }
 done
-
-if [ ! -d "$repo/claude" ]; then
-  echo "install.sh: run this from a clone; it links claude/ out of the repo." >&2
-  echo "  git clone git@github.com:xs1128/agentfiles.git ~/.agentfiles && sh ~/.agentfiles/install.sh" >&2
-  exit 1
-fi
-
-# node only matters for the MCP servers, which are npm packages.
-required="curl git jq"
-if [ "$mcp" -eq 1 ]; then required="$required node npm"; fi
-missing=''
-for tool in $required; do
-  command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+for f in "$r"/mcp/*.json; do
+  n=$(basename "$f" .json)
+  grep -q "^\[mcp_servers\.$n\]" "$t" || jq -r --arg n "$n" '.mcpServers[$n] | "\n[mcp_servers.\($n)]\n"
+    + (if .url then "url = \(.url | tojson)\n" else "command = \(.command | tojson)\nargs = \(.args // [] | tojson)\n" end)
+    + "enabled = false\n"
+    + (if .env then "\n[mcp_servers.\($n).env]\n" + ([.env | to_entries[] | "\(.key) = \(.value | tojson)"] | join("\n")) + "\n" else "" end)' "$f" >> "$t"
 done
-if [ -n "$missing" ]; then
-  echo "install.sh: missing:$missing" >&2
-  case "$(uname -s)" in
-    Darwin) echo "  brew install$missing" >&2 ;;
-    *)      echo "  sudo apt install$missing   (or your distro's equivalent)" >&2 ;;
-  esac
-  exit 1
-fi
+chmod 600 "$t"
 
-mkdir -p "$bin"
+for m in JuliusBrussee/caveman jarrodwatts/claude-hud; do [ -d "$c/plugins/marketplaces/${m#*/}" ] || claude plugin marketplace add "$m" >/dev/null; done
+for p in caveman@caveman claude-hud@claude-hud; do claude plugin install "$p" >/dev/null; done
 
-# Before the installs: what they drop here must run in this same shell.
-PATH="$bin:$HOME/.bun/bin:$PATH"
-export PATH
+case ${SHELL:-} in */zsh) rc=$HOME/.zshrc ;; */bash) rc=$HOME/.bashrc ;; *) rc=$HOME/.profile ;; esac
+grep -qs agentfiles "$rc" || printf '\n# agentfiles\nexport PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH"\n' >> "$rc"
 
-if [ "$deps" -eq 1 ]; then
-  if command -v claude >/dev/null 2>&1; then
-    claude update || echo "claude update failed; continuing"
-  else
-    curl -fsSL https://claude.ai/install.sh | bash
-  fi
-  echo "claude: $(claude --version 2>/dev/null || echo 'not on PATH yet')"
-
-  if [ "$codex" -eq 1 ]; then
-    if command -v codex >/dev/null 2>&1; then
-      codex update || echo "codex update failed; continuing"
-    else
-      curl -fsSL https://chatgpt.com/codex/install.sh | sh
-    fi
-    echo "codex: $(codex --version 2>/dev/null || echo 'not on PATH yet')"
-  fi
-
-  if command -v bun >/dev/null 2>&1 || [ -x "$HOME/.bun/bin/bun" ]; then
-    echo "bun already installed"
-  else
-    curl -fsSL https://bun.sh/install | bash
-  fi
-
-  if command -v rtk >/dev/null 2>&1 || [ -x "$bin/rtk" ]; then
-    echo "rtk already installed"
-  else
-    curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh | sh
-  fi
-fi
-
-rm -f "$bin/claude-glm"
-ln -sf "$repo/scripts/glm.sh" "$bin/glm"
-echo "installed $bin/glm"
-
-case "$(basename "${SHELL:-/bin/sh}")" in
-  zsh)  rc="$HOME/.zshrc" ;;
-  bash) if [ -f "$HOME/.bash_profile" ]; then rc="$HOME/.bash_profile"; else rc="$HOME/.bashrc"; fi ;;
-  *)    rc="$HOME/.profile" ;;
-esac
-
-if [ -f "$rc" ] && grep -q '^# agentfiles$' "$rc"; then
-  echo "$rc already wired"
-else
-  {
-    echo ''
-    echo '# agentfiles'
-    echo 'for d in "$HOME/.local/bin" "$HOME/.bun/bin"; do'
-    echo '  case ":$PATH:" in *":$d:"*) ;; *) PATH="$d:$PATH" ;; esac'
-    echo 'done'
-    echo 'export PATH'
-  } >> "$rc"
-  echo "wired $rc"
-fi
-
-sh "$repo/scripts/link.sh"
-if [ "$codex" -eq 1 ]; then
-  sh "$repo/scripts/link-codex.sh"
-fi
-
-if [ "$bootstrap" -eq 1 ]; then
-  if [ "$mcp" -eq 1 ]; then
-    sh "$repo/scripts/bootstrap.sh" --mcp
-  else
-    sh "$repo/scripts/bootstrap.sh"
-  fi
-fi
-
-echo
-echo "done. run 'exec \$SHELL' or open a new terminal, then: claude"
-if [ "$codex" -eq 1 ]; then
-  echo "or, for the same skills under OpenAI's harness: codex"
-fi
-echo "for z.ai's GLM instead: glm   (needs ZAI_API_KEY, see .env.example)"
-if [ "$mcp" -eq 0 ]; then
-  echo "no MCP servers installed; add them with: sh scripts/bootstrap.sh --mcp"
-fi
+echo "done: $(ls -d "$r"/skills/*/ | wc -l | tr -d ' ') skills and $(ls "$r"/mcp | wc -l | tr -d ' ') mcp servers, all off. open a new shell."
