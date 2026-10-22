@@ -8,7 +8,6 @@
     "commit": "",
     "pr": ""
   },
-  "model": "opus[1m]",
   "outputStyle": "ELI5",
   "hooks": {
     "PreToolUse": [
@@ -47,5 +46,5 @@
   },
   "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
-  "$comment": "Symlinked into ~/.claude by scripts/link.sh. Read at launch, so restart Claude after editing."
+  "tui": "fullscreen"
 }

@@ -1,41 +1,15 @@
 # Credits
 
-This repository redistributes work by others.
+Skills in `skills/` come from [mattpocock/skills](https://github.com/mattpocock/skills)
+(MIT, commit `84fdeffd`, plus eight from older commits that upstream has since
+deleted), with these exceptions:
 
-## Skills
+- `emil-design-eng`: [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT, commit `78761e1b`).
+- `confession-translate`, `organize-folder`, `plot-training-log`, `pptx-extract`, `report-creator`: mine.
+  `report-creator` bundles Inconsolata under the SIL Open Font License.
 
-41 of the skills under `skills/` come from
-[mattpocock/skills](https://github.com/mattpocock/skills): 33 at commit
-`84fdeffd12f2ee307994d1eb6feb48173b6e0502`, and 8 more that the repo has since
-deleted, taken at the last commit that carried each.
-
-`emil-design-eng` comes from
-[emilkowalski/skills](https://github.com/emilkowalski/skills) at commit
-`78761e1b57f97dce65b983d640c70a68f39e8163`.
-
-`manifests/skills.json` names which skills came from where.
-
-## Plugins
-
-`bootstrap.sh` installs plugins from marketplaces this repo does not own, each
-pinned to a commit in `manifests/plugins.json`. They are cloned at install time
-and remain under their own licenses:
-
-- [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman)
-- [jarrodwatts/claude-hud](https://github.com/jarrodwatts/claude-hud)
-
-The plugins Codex enables in `codex/plugins.toml.tmpl` ship with Codex itself
-and are not redistributed here.
-
-## Tools
-
-Claude Code, Codex, `rtk` and `bun` are installed from their upstream installers
-by `install.sh` and are not redistributed as source here.
-
-## License
-
-The vendored skills above are MIT licensed. MIT requires the notice to travel
-with the copies, so it is reproduced here in full.
+Plugins keep their own licenses: [caveman](https://github.com/JuliusBrussee/caveman),
+[claude-hud](https://github.com/jarrodwatts/claude-hud).
 
 MIT License
 
